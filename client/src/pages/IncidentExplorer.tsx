@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { IncidentRecord, IncidentCategory, UrgencyLevel } from '@sahaaysetu/shared';
 import { UrgencyBadge } from '../components/UrgencyBadge';
+import { FreshnessBadge } from '../components/FreshnessBadge';
 import { Language, translations } from '../locales/translations';
 import {
   Search,
@@ -10,7 +11,8 @@ import {
   Clock,
   Printer,
   ArrowRight,
-  ShieldAlert
+  ShieldAlert,
+  AlertOctagon
 } from 'lucide-react';
 
 interface Props {
@@ -119,48 +121,64 @@ export const IncidentExplorer: React.FC<Props> = ({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filtered.map((inc) => (
-            <div
-              key={inc.id}
-              className="bg-white rounded-2xl p-6 border border-slate-200 hover:border-brand-400 hover:shadow-md transition flex flex-col justify-between space-y-4"
-            >
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-mono font-bold text-slate-500 uppercase">
-                    {inc.category.replace('_', ' ')}
-                  </span>
-                  <UrgencyBadge urgency={inc.estimatedUrgency} score={inc.urgencyScore} size="sm" />
-                </div>
+          {filtered.map((inc) => {
+            const unresolvedConflicts = (inc.contradictions || []).filter(c => !c.isResolved).length;
 
-                <h3 className="text-lg font-bold text-slate-900 line-clamp-2">
-                  {inc.title}
-                </h3>
-
-                <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed">
-                  {inc.situationSummary}
-                </p>
-
-                <div className="pt-1 text-xs text-slate-500 flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span className="truncate">{inc.location.rawText}</span>
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  {inc.isDemoScenario ? (
-                    <span className="text-[11px] font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200">
-                      Demo Scenario
+            return (
+              <div
+                key={inc.id}
+                className="bg-white rounded-2xl p-6 border border-slate-200 hover:border-brand-400 hover:shadow-md transition flex flex-col justify-between space-y-4"
+              >
+                <div className="space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-mono font-bold text-slate-500 uppercase">
+                      {inc.category.replace('_', ' ')}
                     </span>
-                  ) : (
-                    <span className="text-[11px] font-semibold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">
-                      Live Submission
-                    </span>
-                  )}
-                  <span className="text-[11px] text-slate-400 font-mono">
-                    {new Date(inc.createdAt).toLocaleDateString()}
-                  </span>
+                    <div className="flex items-center gap-2">
+                      {inc.freshness && (
+                        <FreshnessBadge evaluation={inc.freshness} size="sm" />
+                      )}
+                      <UrgencyBadge urgency={inc.estimatedUrgency} score={inc.urgencyScore} size="sm" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <h3 className="text-lg font-bold text-slate-900 line-clamp-2">
+                      {inc.title}
+                    </h3>
+                    {unresolvedConflicts > 0 && (
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                        <AlertOctagon className="w-3.5 h-3.5 text-amber-700" />
+                        <span>{unresolvedConflicts} Unresolved Conflict{unresolvedConflicts > 1 ? 's' : ''}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed">
+                    {inc.situationSummary}
+                  </p>
+
+                  <div className="pt-1 text-xs text-slate-500 flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span className="truncate">{inc.location.rawText}</span>
+                  </div>
                 </div>
+
+                <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    {inc.isDemoScenario ? (
+                      <span className="text-[11px] font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200">
+                        Demo Scenario
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-semibold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">
+                        Live Submission
+                      </span>
+                    )}
+                    <span className="text-[11px] text-slate-400 font-mono">
+                      {new Date(inc.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
 
                 <div className="flex items-center gap-2">
                   <button
@@ -192,9 +210,10 @@ export const IncidentExplorer: React.FC<Props> = ({
                 </div>
               </div>
             </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+          );
+        })}
+      </div>
+    )}
+  </div>
+);
 };

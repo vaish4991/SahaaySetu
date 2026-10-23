@@ -1,7 +1,9 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import {
   IncidentInputPayloadSchema,
-  IncidentRecordSchema,
+  IncidentSubReportSchema,
+  ContradictionResolutionSchema,
+  ConfirmationRecordSchema,
   DEMO_SCENARIOS
 } from '@sahaaysetu/shared';
 import { incidentStore } from '../storage/incidentStore';
@@ -10,12 +12,27 @@ import { aiRateLimiter, upload } from '../middleware/security';
 
 export const incidentsRouter = Router();
 
-// GET all demonstration scenarios
+// GET all demonstration scenarios (now 8 grounded scenarios)
 incidentsRouter.get('/demos', (_req: Request, res: Response) => {
   res.json({
     success: true,
     scenarios: DEMO_SCENARIOS
   });
+});
+
+// POST reset demo scenarios to pristine state (Feature 6 requirement)
+incidentsRouter.post('/reset-demos', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    await incidentStore.seedDemoScenarios();
+    const count = incidentStore.getAll().length;
+    res.json({
+      success: true,
+      count,
+      message: 'All 8 demonstration scenarios restored to initial sample state.'
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // GET all incidents (with filtering and search)
@@ -51,7 +68,6 @@ incidentsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       let bodyData = req.body;
-      // Handle stringified form fields if sent as multipart
       if (typeof bodyData.consentGivenForMedical === 'string') {
         bodyData.consentGivenForMedical = bodyData.consentGivenForMedical === 'true';
       }
@@ -59,20 +75,14 @@ incidentsRouter.post(
         bodyData.consentGivenForLocation = bodyData.consentGivenForLocation === 'true';
       }
 
-      // If an image was uploaded, attach base64 representation
       if (req.file) {
         bodyData.imageBase64 = req.file.buffer.toString('base64');
         bodyData.imageMimeType = req.file.mimetype;
         bodyData.imageName = req.file.originalname;
       }
 
-      // Validate input payload with Zod
       const validatedPayload = IncidentInputPayloadSchema.parse(bodyData);
-
-      // Perform analysis via Gemini service (or deterministic demo engine)
       const analyzedRecord = await analyzeIncident(validatedPayload);
-
-      // Save to store
       const savedRecord = incidentStore.save(analyzedRecord);
 
       res.status(201).json({
@@ -85,6 +95,128 @@ incidentsRouter.post(
     }
   }
 );
+
+// POST append a sub-report / update (Feature 1: multi-report ingestion)
+incidentsRouter.post('/:id/sub-reports', (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = String(req.params.id);
+    const existing = incidentStore.getById(id);
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Incident not found' });
+    }
+
+    const subReportData = {
+      ...req.body,
+      id: req.body.id || `subrep-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      submittedAt: req.body.submittedAt || new Date().toISOString(),
+      text: req.body.text || req.body.content || '',
+      locationDescription: req.body.locationDescription || req.body.location || undefined
+    };
+
+    const validated = IncidentSubReportSchema.parse(subReportData);
+    const updated = incidentStore.addSubReport(id, validated);
+
+    res.status(201).json({
+      success: true,
+      incident: updated,
+      subReport: validated
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST resolve a contradiction (Feature 1: reviewed resolution without deleting original claims)
+incidentsRouter.post('/:id/contradictions/:contradictionId/resolve', (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = String(req.params.id);
+    const contradictionId = String(req.params.contradictionId);
+
+    const existing = incidentStore.getById(id);
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Incident not found' });
+    }
+
+    const resolution = ContradictionResolutionSchema.parse({
+      resolvedAt: new Date().toISOString(),
+      resolvedBy: req.body.resolvedBy || req.body.reviewedBy || 'Authorized Reviewer',
+      resolutionRationale: req.body.resolutionRationale || req.body.rationale || '',
+      acceptedClaimId: req.body.acceptedClaimId || req.body.selectedClaimId,
+      additionalEvidenceSubmitted: req.body.additionalEvidenceSubmitted
+    });
+
+    const updated = incidentStore.resolveContradiction(id, contradictionId, resolution);
+    const targetContradiction = updated?.contradictions.find(c => c.id === contradictionId);
+    res.json({
+      success: true,
+      incident: updated,
+      contradiction: targetContradiction
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST record a confirmation (Feature 3: status confirmation updating freshness)
+incidentsRouter.post('/:id/confirmations', (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = String(req.params.id);
+    const existing = incidentStore.getById(id);
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Incident not found' });
+    }
+
+    const confirmation = ConfirmationRecordSchema.parse({
+      id: req.body.id || `conf-${Date.now()}`,
+      confirmedAt: req.body.confirmedAt || new Date().toISOString(),
+      confirmedBy: req.body.confirmedBy || 'On-Scene Observer',
+      source: req.body.source || req.body.confirmedBy || 'Citizen Confirmation',
+      note: req.body.note || req.body.notes
+    });
+
+    const updated = incidentStore.addConfirmation(id, confirmation);
+    res.json({
+      success: true,
+      incident: updated,
+      confirmation
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST record a reviewed fact correction (Feature 2: Trust Trace correction with provenance)
+incidentsRouter.post('/:id/facts/:factId/correction', (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = String(req.params.id);
+    const factId = String(req.params.factId);
+    const { correctionText, reviewerName } = req.body;
+
+    if (!correctionText || typeof correctionText !== 'string' || !correctionText.trim()) {
+      return res.status(400).json({ success: false, error: 'Correction text is required' });
+    }
+
+    const existing = incidentStore.getById(id);
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Incident not found' });
+    }
+
+    const updated = incidentStore.correctFact(
+      id,
+      factId,
+      correctionText.trim(),
+      reviewerName || 'Field Reviewer'
+    );
+
+    res.json({
+      success: true,
+      incident: updated,
+      fact: updated?.userReportedFacts.find(f => f.id === factId)
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // PATCH update reviewed facts, location, or action items
 incidentsRouter.patch('/:id', (req: Request, res: Response, next: NextFunction) => {

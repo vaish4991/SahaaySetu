@@ -5,6 +5,8 @@ export interface Translations {
   tagline: string;
   navDashboard: string;
   navSubmit: string;
+  navReview: string;
+  navActions: string;
   navExplorer: string;
   navSettings: string;
   ctaAnalyze: string;
@@ -36,6 +38,13 @@ export interface Translations {
   disclaimerText: string;
   privacyNotice: string;
   clearDataBtn: string;
+  // Phase 2 additions
+  trustTraceBtn: string;
+  contradictionsTitle: string;
+  freshnessTitle: string;
+  timelineTitle: string;
+  addSubReportBtn: string;
+  resetDemosBtn: string;
 }
 
 export const translations: Record<Language, Translations> = {
@@ -44,6 +53,8 @@ export const translations: Record<Language, Translations> = {
     tagline: 'The AI Crisis-to-Action Bridge',
     navDashboard: 'Situation Dashboard',
     navSubmit: 'Incident Studio',
+    navReview: 'Review Facts',
+    navActions: 'Action Plan',
     navExplorer: 'Incident Records',
     navSettings: 'Settings & Privacy',
     ctaAnalyze: 'Analyze a Situation',
@@ -74,13 +85,21 @@ export const translations: Record<Language, Translations> = {
     analyzingText: 'Gemini AI is analyzing facts, hazards, and next steps...',
     disclaimerText: 'SahaaySetu is an AI-assisted coordination bridge. For life emergencies, immediately call 112 / 911. It does not replace emergency dispatch or medical professionals.',
     privacyNotice: 'Your raw voice audio and photos are processed in memory and never permanently stored.',
-    clearDataBtn: 'Clear Local Session Data'
+    clearDataBtn: 'Clear Local Session Data',
+    trustTraceBtn: 'Inspect Trust Trace',
+    contradictionsTitle: 'Detected Contradictions',
+    freshnessTitle: 'Information Freshness',
+    timelineTitle: 'Evidence Timeline',
+    addSubReportBtn: 'Submit Additional Evidence',
+    resetDemosBtn: 'Reset Demo Scenarios'
   },
   hi: {
     appName: 'सहायसेतु (SahaaySetu)',
     tagline: 'आपदा से त्वरित कार्रवाई सेतु',
     navDashboard: 'स्थिति डैशबोर्ड',
     navSubmit: 'घटना स्टूडियो',
+    navReview: 'तथ्य समीक्षा',
+    navActions: 'कार्य योजना',
     navExplorer: 'घटना रिकॉर्ड्स',
     navSettings: 'सेटिंग्स व गोपनीयता',
     ctaAnalyze: 'नई स्थिति का विश्लेषण करें',
@@ -111,6 +130,12 @@ export const translations: Record<Language, Translations> = {
     analyzingText: 'जेमिनी एआई स्थिति, खतरों व आवश्यक कदमों का विश्लेषण कर रहा है...',
     disclaimerText: 'सहायसेतु एक एआई-सहायक समन्वय प्रणाली है। जानलेवा आपात स्थिति में तुरंत 112 पर कॉल करें। यह डॉक्टरों या आपातकालीन सेवाओं का विकल्प नहीं है।',
     privacyNotice: 'आपकी आवाज और फोटो केवल मेमोरी में प्रोसेस की जाती हैं और सुरक्षित रखी जाती हैं।',
-    clearDataBtn: 'सत्र डेटा साफ़ करें'
+    clearDataBtn: 'सत्र डेटा साफ़ करें',
+    trustTraceBtn: 'ट्रस्ट ट्रेस देखें',
+    contradictionsTitle: 'पहचाने गए विरोधाभास',
+    freshnessTitle: 'जानकारी की ताजगी',
+    timelineTitle: 'साक्ष्य समयरेखा',
+    addSubReportBtn: 'अतिरिक्त साक्ष्य जोड़ें',
+    resetDemosBtn: 'डेमो परिदृश्य रीसेट करें'
   }
 };

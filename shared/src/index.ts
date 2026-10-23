@@ -37,6 +37,120 @@ export type LocationConfidence = z.infer<typeof LocationConfidenceEnum>;
 export const ActionPriorityEnum = z.enum(['IMMEDIATE', 'HIGH', 'ROUTINE']);
 export type ActionPriority = z.infer<typeof ActionPriorityEnum>;
 
+export const FreshnessStatusEnum = z.enum(['CURRENT', 'AGING', 'STALE', 'UNKNOWN']);
+export type FreshnessStatus = z.infer<typeof FreshnessStatusEnum>;
+
+// Freshness Evaluation Schema
+export const FreshnessEvaluationSchema = z.object({
+  status: FreshnessStatusEnum,
+  ageMinutes: z.number().nullable(),
+  ageFormatted: z.string(),
+  lastConfirmedAt: z.string().optional(),
+  warning: z.string().optional(),
+  thresholdMinutes: z.number()
+});
+export type FreshnessEvaluation = z.infer<typeof FreshnessEvaluationSchema>;
+
+// Confirmation Record Schema
+export const ConfirmationRecordSchema = z.object({
+  id: z.string(),
+  confirmedAt: z.string(),
+  confirmedBy: z.string(),
+  source: z.string(),
+  note: z.string().optional()
+});
+export type ConfirmationRecord = z.infer<typeof ConfirmationRecordSchema>;
+
+// Sub-Report Schema (Multiple reports associated with one incident)
+export const IncidentSubReportSchema = z.object({
+  id: z.string(),
+  sourceName: z.string(),
+  sourceType: z.enum(['CITIZEN_TEXT', 'VOICE_TRANSCRIPT', 'OFFICIAL_BULLETIN', 'SCENE_PHOTO', 'EMERGENCY_DISPATCH']),
+  submittedAt: z.string(),
+  eventObservedAt: z.string().optional(),
+  text: z.string(),
+  locationDescription: z.string().optional(),
+  verificationStatus: EvidenceLabelEnum,
+  mediaUrl: z.string().optional(),
+  isEventTimeUnknown: z.boolean().default(false)
+});
+export type IncidentSubReport = z.infer<typeof IncidentSubReportSchema>;
+
+// Contradiction Resolution Schema
+export const ContradictionResolutionSchema = z.object({
+  resolvedAt: z.string(),
+  resolvedBy: z.string(),
+  resolutionRationale: z.string(),
+  acceptedClaimId: z.string().optional(),
+  additionalEvidenceSubmitted: z.string().optional()
+});
+export type ContradictionResolution = z.infer<typeof ContradictionResolutionSchema>;
+
+// Contradiction Item Schema
+export const ContradictionItemSchema = z.object({
+  id: z.string(),
+  topic: z.string(),
+  explanation: z.string(),
+  claimA: z.object({
+    id: z.string(),
+    claimText: z.string(),
+    sourceName: z.string(),
+    submittedAt: z.string(),
+    eventObservedAt: z.string().optional(),
+    location: z.string().optional(),
+    verificationStatus: EvidenceLabelEnum
+  }),
+  claimB: z.object({
+    id: z.string(),
+    claimText: z.string(),
+    sourceName: z.string(),
+    submittedAt: z.string(),
+    eventObservedAt: z.string().optional(),
+    location: z.string().optional(),
+    verificationStatus: EvidenceLabelEnum
+  }),
+  isResolved: z.boolean().default(false),
+  resolution: ContradictionResolutionSchema.optional(),
+  severity: z.enum(['HIGH', 'MEDIUM', 'LOW']).default('HIGH')
+});
+export type ContradictionItem = z.infer<typeof ContradictionItemSchema>;
+
+// Trust Trace Schema
+export const TrustTraceSchema = z.object({
+  targetId: z.string(),
+  supportingClaim: z.string(),
+  sourceName: z.string().optional(),
+  sourceType: z.string().optional(),
+  submissionTime: z.string().optional(),
+  eventTime: z.string().optional(),
+  evidenceLabel: EvidenceLabelEnum,
+  supportExplanation: z.string(),
+  verificationDetails: z.string(),
+  hasUnresolvedContradiction: z.boolean().optional(),
+  relatedContradictionId: z.string().optional(),
+  uncertaintyNotes: z.string().optional(),
+  reviewedCorrection: z.string().optional(),
+  reviewedAt: z.string().optional()
+});
+export type TrustTrace = z.infer<typeof TrustTraceSchema>;
+
+// Timeline Event Schema
+export const TimelineEventSchema = z.object({
+  id: z.string(),
+  eventType: z.enum(['REPORT_SUBMITTED', 'MEDIA_CAPTURED', 'CONTRADICTION_DETECTED', 'USER_VERIFICATION', 'STATUS_CONFIRMED', 'ACTION_TAKEN']),
+  title: z.string(),
+  description: z.string(),
+  timestamp: z.string(),
+  displayTime: z.string(),
+  eventTime: z.string().optional(),
+  submissionTime: z.string().optional(),
+  isEventTimeUnknown: z.boolean().default(false),
+  sourceName: z.string().optional(),
+  evidenceLabel: EvidenceLabelEnum.optional(),
+  statusBadge: z.string().optional()
+});
+export type TimelineEvent = z.infer<typeof TimelineEventSchema>;
+
 // Core Schema Elements
 export const IncidentFactSchema = z.object({
   id: z.string(),
@@ -44,7 +158,8 @@ export const IncidentFactSchema = z.object({
   evidenceLabel: EvidenceLabelEnum,
   userConfirmed: z.boolean().default(false),
   sourceReference: z.string().optional(),
-  confidenceScore: z.number().min(0).max(1).default(0.8)
+  confidenceScore: z.number().min(0).max(1).default(0.8),
+  trustTrace: TrustTraceSchema.optional()
 });
 export type IncidentFact = z.infer<typeof IncidentFactSchema>;
 
@@ -53,7 +168,8 @@ export const HazardItemSchema = z.object({
   description: z.string().min(1),
   severity: z.enum(['SEVERE', 'MODERATE', 'LOW']),
   precautions: z.string(),
-  evidenceLabel: EvidenceLabelEnum
+  evidenceLabel: EvidenceLabelEnum,
+  trustTrace: TrustTraceSchema.optional()
 });
 export type HazardItem = z.infer<typeof HazardItemSchema>;
 
@@ -68,7 +184,14 @@ export const ActionItemSchema = z.object({
   evidenceLabel: EvidenceLabelEnum,
   requiresConfirmation: z.boolean().default(false),
   isCompleted: z.boolean().default(false),
-  emergencyServiceContact: z.string().optional()
+  emergencyServiceContact: z.string().optional(),
+  freshnessStatus: FreshnessStatusEnum.optional(),
+  hasUnresolvedConflict: z.boolean().default(false),
+  conflictWarning: z.string().optional(),
+  staleWarning: z.string().optional(),
+  supportingEvidenceClaim: z.string().optional(),
+  importantUnknowns: z.array(z.string()).optional(),
+  trustTrace: TrustTraceSchema.optional()
 });
 export type ActionItem = z.infer<typeof ActionItemSchema>;
 
@@ -97,6 +220,8 @@ export const IncidentInputPayloadSchema = z.object({
   imageBase64: z.string().optional(),
   imageMimeType: z.string().optional(),
   imageName: z.string().optional(),
+  mediaCapturedAt: z.string().optional(),
+  eventObservedAt: z.string().optional(),
   medicalContext: z.string().max(2000).optional().default(''),
   consentGivenForMedical: z.boolean().default(false),
   consentGivenForLocation: z.boolean().default(false),
@@ -133,7 +258,7 @@ export const IncidentRecordSchema = z.object({
   }),
   estimatedUrgency: UrgencyLevelEnum,
   urgencyExplanation: z.string(),
-  urgencyScore: z.number().min(0).max(100), // Algorithmic + AI transparent score (0-100)
+  urgencyScore: z.number().min(0).max(100),
   potentialHazards: z.array(HazardItemSchema),
   peopleAffected: z.object({
     estimatedCount: z.string().optional(),
@@ -149,6 +274,16 @@ export const IncidentRecordSchema = z.object({
     contentSnippet: z.string(),
     sourceAttribution: z.string()
   })),
+  subReports: z.array(IncidentSubReportSchema).default([]),
+  contradictions: z.array(ContradictionItemSchema).default([]),
+  confirmations: z.array(ConfirmationRecordSchema).default([]),
+  timelineEvents: z.array(TimelineEventSchema).default([]),
+  freshness: FreshnessEvaluationSchema.default({
+    status: 'CURRENT',
+    ageMinutes: 0,
+    ageFormatted: 'Just submitted',
+    thresholdMinutes: 30
+  }),
   verificationStatus: z.enum(['REQUIRES_HUMAN_REVIEW', 'USER_VERIFIED', 'OFFICIALLY_UNVERIFIED']),
   lifecycleStatus: IncidentLifecycleStatusEnum,
   possibleDuplicates: z.array(DuplicateSuggestionSchema).default([]),
@@ -186,6 +321,8 @@ export const ResponderBriefSchema = z.object({
     precautions: z.string()
   })),
   openUncertainties: z.array(z.string()),
+  unresolvedContradictions: z.array(z.string()).default([]),
+  freshnessStatus: FreshnessStatusEnum.default('CURRENT'),
   contactEmergencyServices: z.array(z.string()),
   containsRedactedMedical: z.boolean(),
   confidentialityNote: z.string()
@@ -205,7 +342,17 @@ export const EMERGENCY_NUMBERS = [
   { jurisdiction: 'European Union', service: 'Emergency', number: '112', notes: 'Pan-European helpline' }
 ];
 
-// 5 Realistic Sample Scenarios (Deterministic & explicitly labeled as demonstrations)
+// Configurable Category Freshness Thresholds (Minutes)
+export const CATEGORY_FRESHNESS_THRESHOLDS: Record<IncidentCategory, { currentMax: number; agingMax: number }> = {
+  TRAFFIC_ACCIDENT: { currentMax: 20, agingMax: 60 },
+  NATURAL_DISASTER: { currentMax: 45, agingMax: 120 },
+  INFRASTRUCTURE_FAILURE: { currentMax: 30, agingMax: 90 },
+  MEDICAL_EMERGENCY: { currentMax: 15, agingMax: 45 },
+  PUBLIC_SAFETY: { currentMax: 30, agingMax: 90 },
+  OTHER: { currentMax: 30, agingMax: 90 }
+};
+
+// 8 Realistic Sample Scenarios (5 Original + 3 Distinctive Phase-2 Intelligence Scenarios)
 export const DEMO_SCENARIOS = [
   {
     id: 'demo-1-flood-waterlogging',
@@ -308,6 +455,68 @@ export const DEMO_SCENARIOS = [
     hazards: [
       { id: 'h1', description: 'Airway obstruction or acute cardiac / hypoglycemic crisis requiring immediate professional life support', severity: 'SEVERE' as const, precautions: 'Call 108 / 112 immediately; place patient in recovery position if breathing; check for clear airway without forcing foreign objects into mouth', evidenceLabel: 'USER-REPORTED' as EvidenceLabel },
       { id: 'h2', description: 'Medical intervention risks: Bystanders attempting to give water or oral medication to an unresponsive person', severity: 'SEVERE' as const, precautions: 'STRICT WARNING: DO NOT administer fluids, food, or oral sugar to an unconscious/unresponsive person due to severe choking/aspiration risk', evidenceLabel: 'AI-INFERRED' as EvidenceLabel }
+    ]
+  },
+  // --- DISTINCTIVE FEATURE 6 EXTENDED SCENARIOS ---
+  {
+    id: 'demo-6-road-condition-contradiction',
+    title: 'Disputed Milan Subway Passability (Genuine Contradiction Review)',
+    category: 'INFRASTRUCTURE_FAILURE' as IncidentCategory,
+    description: 'Two contemporaneous reports from motorists at Milan Subway submit completely contradictory claims: Report A claims subway is dry and cars are flowing freely; Report B with photo submitted 6 minutes later claims underpass is submerged in 3.8 feet of water with drowned engines. Demonstrates side-by-side contradiction detection, unresolved status alert, and conservative action prioritization.',
+    inputPayload: {
+      text: 'Report A (Commuter Voice Note, 10:14 AM): "Milan Subway is completely clear and open! Drove through 2 minutes ago, water is barely tire deep, cars moving normally."\n\nReport B (Local Shopkeeper with Photo, 10:20 AM): "ALERT: Milan Subway is TOTALLY BLOCKED and submerged under 4 feet of fast water! A hatchback just stalled and drowned its engine. Road is impassable!"',
+      pastedReport: 'Traffic Control Room Log (10:18 AM): Conflicting calls received regarding Milan Subway passability. Patrol unit dispatched to verify physical barricade status.',
+      pastedReportSource: 'Traffic Police Control Room CAD Feed',
+      consentGivenForLocation: true,
+      consentGivenForMedical: false,
+      languagePreference: 'en' as const
+    },
+    urgency: 'HIGH' as UrgencyLevel,
+    urgencyScore: 84,
+    locationText: 'Milan Subway Underpass, SV Road, Santacruz West',
+    hazards: [
+      { id: 'h1', description: 'Severe flash waterlogging with submerged vehicles trapped in low-lying underpass', severity: 'SEVERE' as const, precautions: 'CONSERVATIVE ACTION: Treat underpass as impassable until on-scene confirmation; deploy physical barricades at north entrance.', evidenceLabel: 'USER-REPORTED' as EvidenceLabel }
+    ]
+  },
+  {
+    id: 'demo-7-stale-landslide-photo',
+    title: 'Stale Ghat Road Landslide Photo (Captured 95 Mins Ago, No Current Confirmation)',
+    category: 'NATURAL_DISASTER' as IncidentCategory,
+    description: 'A road obstruction photo was just uploaded to the platform, but image metadata and timestamp indicate it was captured 95 minutes ago on Khandala Ghat. Demonstrates the Information Freshness Engine: marks visual evidence STALE, explains that recent clearing crews may have altered the scene, and cautions responders against acting on outdated visual data.',
+    inputPayload: {
+      text: 'Just sharing this photo of huge boulders blocking the Pune-Mumbai Ghat road near Amrutanjan bridge. Traffic stopped behind rocks.',
+      imageName: 'khandala_boulders_clearing.jpg',
+      mediaCapturedAt: new Date(Date.now() - 95 * 60 * 1000).toISOString(), // 95 minutes ago
+      eventObservedAt: new Date(Date.now() - 95 * 60 * 1000).toISOString(),
+      consentGivenForLocation: true,
+      consentGivenForMedical: false,
+      languagePreference: 'en' as const
+    },
+    urgency: 'HIGH' as UrgencyLevel,
+    urgencyScore: 68,
+    locationText: 'Old Pune-Mumbai Highway, Km 48 near Amrutanjan Point',
+    hazards: [
+      { id: 'h1', description: 'Possible road blockage by falling debris; condition currently unconfirmed due to stale evidence age (95m)', severity: 'MODERATE' as const, precautions: 'Do not assume highway is closed without active confirmation from Highway Safety Patrol.', evidenceLabel: 'AI-INFERRED' as EvidenceLabel }
+    ]
+  },
+  {
+    id: 'demo-8-unverified-viral-dam-breach',
+    title: 'Unverified Viral Dam Breach Forward vs Official Irrigation Department Bulletin',
+    category: 'PUBLIC_SAFETY' as IncidentCategory,
+    description: 'Panicked WhatsApp voice notes claim a dam wall has fractured with 15-minute downstream flooding. Official State Water Resources Department telemetry issued 8 minutes ago confirms the reservoir is at 71% safe capacity with zero sluice releases. Trust Trace exposes the viral note as UNVERIFIED, flags the contradiction, and prevents community panic.',
+    inputPayload: {
+      text: 'Viral voice message circulating: "Everyone run! The dam wall at Khadakwasla has cracked and water will reach Sinhagad road in 15 minutes! Evacuate immediately!"',
+      pastedReport: 'OFFICIAL IRRIGATION BULLETIN (8 mins ago): Water Resources Dept confirms Khadakwasla dam structural health is 100% normal. Reservoir level at 71.4%. Sluice gates are closed. Disregard false viral audio clips.',
+      pastedReportSource: 'Maharashtra Water Resources Dept Emergency Desk',
+      consentGivenForLocation: true,
+      consentGivenForMedical: false,
+      languagePreference: 'en' as const
+    },
+    urgency: 'MEDIUM' as UrgencyLevel,
+    urgencyScore: 54,
+    locationText: 'Khadakwasla Dam & Sinhagad Road Catchment, Pune',
+    hazards: [
+      { id: 'h1', description: 'Severe public panic, road congestion, and potential pedestrian stampedes from unverified viral dam breach claims', severity: 'SEVERE' as const, precautions: 'Disseminate verified Irrigation Department bulletin immediately via local radio and police loudspeaker vehicles.', evidenceLabel: 'SOURCE-VERIFIED' as EvidenceLabel }
     ]
   }
 ];

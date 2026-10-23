@@ -5,6 +5,7 @@ import { EvidenceBadge } from '../components/EvidenceBadge';
 import { UrgencyBadge } from '../components/UrgencyBadge';
 import { EmergencyContactsBar } from '../components/EmergencyContactsBar';
 import { ActionCenter } from '../pages/ActionCenter';
+import { SubmitIncident } from '../pages/SubmitIncident';
 import { IncidentRecord } from '@sahaaysetu/shared';
 
 describe('UI Component Tests', () => {
@@ -61,10 +62,21 @@ describe('UI Component Tests', () => {
           rationale: 'Prevent pileup',
           evidenceLabel: 'AI-INFERRED',
           requiresConfirmation: false,
-          isCompleted: false
+          isCompleted: false,
+          hasUnresolvedConflict: false
         }
       ],
       evidenceReferences: [],
+      subReports: [],
+      contradictions: [],
+      confirmations: [],
+      timelineEvents: [],
+      freshness: {
+        status: 'CURRENT',
+        ageMinutes: 0,
+        ageFormatted: 'Just submitted',
+        thresholdMinutes: 30
+      },
       verificationStatus: 'REQUIRES_HUMAN_REVIEW',
       lifecycleStatus: 'ANALYZED',
       possibleDuplicates: [],
@@ -97,5 +109,28 @@ describe('UI Component Tests', () => {
 
     const toggleBtn = screen.getByRole('button', { name: /Mark step 1 complete/i });
     fireEvent.click(toggleBtn);
+  });
+
+  it('SubmitIncident renders all 6 unstructured real-world input presets and unlocks medical context on focus', () => {
+    const mockSuccess = vi.fn();
+
+    render(
+      <SubmitIncident
+        onAnalysisSuccess={mockSuccess}
+        language="en"
+      />
+    );
+
+    expect(screen.getByText('Panicked Voice Note')).toBeInTheDocument();
+    expect(screen.getByText('Highway Traffic & Fuel Spill')).toBeInTheDocument();
+    expect(screen.getByText('Severe Weather & Live Wire')).toBeInTheDocument();
+    expect(screen.getByText('Breaking News & Viral Forward')).toBeInTheDocument();
+    expect(screen.getByText('Eyewitness Scene Damage Photo')).toBeInTheDocument();
+    expect(screen.getByText('Messy Medical History Stack')).toBeInTheDocument();
+
+    // Verify medical context can be unlocked without disabled/non-clickable blocks
+    const unlockBtn = screen.getByRole('button', { name: /Click to Unlock Consent/i });
+    fireEvent.click(unlockBtn);
+    expect(screen.getByText(/Consent Active/i)).toBeInTheDocument();
   });
 });

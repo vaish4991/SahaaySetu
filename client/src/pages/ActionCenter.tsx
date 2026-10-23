@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
-import { IncidentRecord, ActionItem } from '@sahaaysetu/shared';
+import React, { useState, useEffect } from 'react';
+import { IncidentRecord, ActionItem, TrustTrace } from '@sahaaysetu/shared';
 import { EvidenceBadge } from '../components/EvidenceBadge';
+import { FreshnessBadge } from '../components/FreshnessBadge';
+import { TrustTraceDrawer } from '../components/TrustTraceDrawer';
 import { EmergencyContactsBar } from '../components/EmergencyContactsBar';
 import { updateIncidentApi } from '../services/api';
 import { Language, translations } from '../locales/translations';
@@ -12,7 +14,10 @@ import {
   Info,
   Shield,
   Printer,
-  ChevronLeft
+  ChevronLeft,
+  Clock,
+  HelpCircle,
+  AlertOctagon
 } from 'lucide-react';
 
 interface Props {
@@ -32,6 +37,13 @@ export const ActionCenter: React.FC<Props> = ({
 }) => {
   const t = translations[language];
   const [actions, setActions] = useState<ActionItem[]>(incident.recommendedActions);
+  const [activeTrustTrace, setActiveTrustTrace] = useState<TrustTrace | null>(null);
+  const [activeTraceTitle, setActiveTraceTitle] = useState<string>('');
+
+  // Synchronize actions when incident updates
+  useEffect(() => {
+    setActions(incident.recommendedActions);
+  }, [incident.id, incident.recommendedActions]);
 
   const toggleActionComplete = async (actionId: string) => {
     const updatedActions = actions.map(a =>
@@ -47,6 +59,26 @@ export const ActionCenter: React.FC<Props> = ({
     } catch (err) {
       console.error('Failed to toggle action status:', err);
     }
+  };
+
+  const openActionTrace = (act: ActionItem) => {
+    const trace: TrustTrace = act.trustTrace || {
+      targetId: act.id,
+      supportingClaim: act.supportingEvidenceClaim || act.rationale,
+      sourceName: incident.userReportedFacts[0]?.trustTrace?.sourceName || incident.subReports[0]?.sourceName || 'Intake Synthesis Matrix',
+      sourceType: incident.userReportedFacts[0]?.trustTrace?.sourceType || incident.subReports[0]?.sourceType || 'USER_TEXT',
+      eventTime: incident.subReports[0]?.eventObservedAt || incident.userReportedFacts[0]?.trustTrace?.eventTime,
+      submissionTime: incident.createdAt,
+      evidenceLabel: act.evidenceLabel,
+      supportExplanation: act.rationale,
+      verificationDetails: act.evidenceLabel === 'SOURCE-VERIFIED'
+        ? 'Verified against official emergency communique.'
+        : 'Action derived from verified triage matrix; requires on-scene confirmation.',
+      hasUnresolvedContradiction: Boolean(act.conflictWarning || act.hasUnresolvedConflict)
+    };
+
+    setActiveTrustTrace(trace);
+    setActiveTraceTitle(`Step ${act.stepNumber}: ${act.title}`);
   };
 
   const completedCount = actions.filter(a => a.isCompleted).length;
@@ -66,14 +98,19 @@ export const ActionCenter: React.FC<Props> = ({
             <span>Back to Evidence Review</span>
           </button>
 
-          <button
-            type="button"
-            onClick={onOpenBrief}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-brand-600 hover:bg-brand-700 text-white transition shadow-sm"
-          >
-            <Printer className="w-4 h-4" />
-            <span>{t.responderBriefBtn}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {incident.freshness && (
+              <FreshnessBadge evaluation={incident.freshness} size="sm" />
+            )}
+            <button
+              type="button"
+              onClick={onOpenBrief}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-brand-600 hover:bg-brand-700 text-white transition shadow-sm"
+            >
+              <Printer className="w-4 h-4" />
+              <span>{t.responderBriefBtn}</span>
+            </button>
+          </div>
         </div>
 
         <div>
@@ -123,12 +160,16 @@ export const ActionCenter: React.FC<Props> = ({
             ROUTINE: 'bg-slate-50 text-slate-800 border-slate-200'
           }[act.priority];
 
+          const actionFreshness = act.freshnessStatus || incident.freshness?.status;
+
           return (
             <div
               key={act.id}
               className={`bg-white rounded-2xl p-6 border transition-all ${
                 act.isCompleted
                   ? 'border-emerald-200 bg-emerald-50/20 opacity-80'
+                  : act.conflictWarning
+                  ? 'border-amber-300 shadow-sm'
                   : 'border-slate-200 hover:border-brand-400 shadow-sm'
               }`}
             >
@@ -156,6 +197,19 @@ export const ActionCenter: React.FC<Props> = ({
                         {act.priority} PRIORITY
                       </span>
                       <EvidenceBadge label={act.evidenceLabel} size="sm" />
+                      {actionFreshness && (
+                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded border ${
+                          actionFreshness === 'CURRENT'
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            : actionFreshness === 'AGING'
+                            ? 'bg-amber-50 text-amber-800 border-amber-200'
+                            : actionFreshness === 'STALE'
+                            ? 'bg-red-50 text-red-800 border-red-200'
+                            : 'bg-slate-50 text-slate-700 border-slate-200'
+                        }`}>
+                          {actionFreshness}
+                        </span>
+                      )}
                       {act.requiresConfirmation && (
                         <span className="text-[11px] bg-purple-50 text-purple-700 px-2 py-0.5 rounded font-medium border border-purple-200">
                           Confirmation Required
@@ -169,11 +223,23 @@ export const ActionCenter: React.FC<Props> = ({
                   </div>
                 </div>
 
-                {act.emergencyServiceContact && (
-                  <span className="text-xs font-mono font-bold text-red-700 bg-red-100 px-2.5 py-1 rounded-lg border border-red-200 shrink-0 hidden sm:inline-block">
-                    Dial {act.emergencyServiceContact}
-                  </span>
-                )}
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => openActionTrace(act)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200 transition"
+                    title="Audit Trust Trace and supporting evidence"
+                  >
+                    <Shield className="w-3.5 h-3.5" />
+                    <span>Trust Trace</span>
+                  </button>
+
+                  {act.emergencyServiceContact && (
+                    <span className="text-xs font-mono font-bold text-red-700 bg-red-100 px-2.5 py-1.5 rounded-lg border border-red-200 hidden sm:inline-block">
+                      Dial {act.emergencyServiceContact}
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Action Description & Rationale */}
@@ -182,11 +248,52 @@ export const ActionCenter: React.FC<Props> = ({
                   {act.description}
                 </p>
 
+                {/* Contradiction Warning */}
+                {act.conflictWarning && (
+                  <div className="p-3 bg-amber-50 rounded-xl border border-amber-300 text-amber-950 text-xs flex items-start gap-2">
+                    <AlertOctagon className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold">Contradiction Caution: </span>
+                      <span>{act.conflictWarning}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Stale Evidence Warning */}
+                {act.staleWarning && (
+                  <div className="p-3 bg-red-50 rounded-xl border border-red-200 text-red-950 text-xs flex items-start gap-2">
+                    <Clock className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold">Freshness Advisory: </span>
+                      <span>{act.staleWarning}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Supporting Claim */}
+                {act.supportingEvidenceClaim && (
+                  <div className="text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-slate-700 font-mono">
+                    <span className="font-sans font-bold text-slate-500">Supporting Evidence Claim: </span>
+                    "{act.supportingEvidenceClaim}"
+                  </div>
+                )}
+
                 {/* Why it matters (Rationale) */}
                 <div className="text-xs bg-slate-50 p-3 rounded-xl border border-slate-200 text-slate-800">
                   <span className="font-bold text-slate-900">Why it matters: </span>
                   <span>{act.rationale}</span>
                 </div>
+
+                {/* Important Unknowns */}
+                {act.importantUnknowns && act.importantUnknowns.length > 0 && (
+                  <div className="text-xs bg-slate-50 p-3 rounded-xl border border-slate-200 text-slate-800 flex items-start gap-2">
+                    <HelpCircle className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold text-slate-900">Important Unknowns: </span>
+                      <span>{act.importantUnknowns.join('; ')}</span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Safety Precautions */}
                 {act.safetyPrecautions && (
@@ -203,6 +310,14 @@ export const ActionCenter: React.FC<Props> = ({
           );
         })}
       </div>
+
+      {/* Trust Trace Drawer */}
+      <TrustTraceDrawer
+        isOpen={Boolean(activeTrustTrace)}
+        onClose={() => setActiveTrustTrace(null)}
+        trustTrace={activeTrustTrace}
+        targetTitle={activeTraceTitle}
+      />
     </div>
   );
 };

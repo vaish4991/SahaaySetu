@@ -2,11 +2,16 @@ import {
   IncidentRecord,
   ResponderBrief,
   ResponderBriefSchema,
-  DEMO_SCENARIOS
+  DEMO_SCENARIOS,
+  IncidentSubReport,
+  ContradictionResolution,
+  ConfirmationRecord
 } from '@sahaaysetu/shared';
 import { analyzeIncident } from '../services/gemini';
 import { findPossibleDuplicates } from '../services/duplicateDetector';
 import { calculateUrgency } from '../services/prioritization';
+import { calculateFreshness } from '../services/freshnessEngine';
+import { detectContradictions, applyContradictionResolution } from '../services/contradictionDetector';
 
 class IncidentStore {
   private incidents: Map<string, IncidentRecord> = new Map();
@@ -16,10 +21,8 @@ class IncidentStore {
     this.seedDemoScenarios();
   }
 
-  private async seedDemoScenarios() {
-    if (this.initialized) return;
-    this.initialized = true;
-
+  public async seedDemoScenarios() {
+    this.incidents.clear();
     for (const demo of DEMO_SCENARIOS) {
       try {
         const incident = await analyzeIncident(demo.inputPayload as any, true);
@@ -30,6 +33,7 @@ class IncidentStore {
         console.error(`Failed to seed demo scenario ${demo.id}:`, err);
       }
     }
+    this.initialized = true;
   }
 
   public getAll(filters?: {
@@ -118,6 +122,232 @@ class IncidentStore {
     return deletedCount;
   }
 
+  /**
+   * Appends an additional sub-report, updates contradictions, freshness, and timeline.
+   */
+  public addSubReport(id: string, subReport: IncidentSubReport): IncidentRecord | null {
+    const inc = this.incidents.get(id);
+    if (!inc) return null;
+
+    const subReports = [...(inc.subReports || []), subReport];
+
+    // Re-detect contradictions across all sub-reports
+    const contradictions = detectContradictions(subReports);
+
+    // Re-calculate freshness
+    const freshness = calculateFreshness({
+      category: inc.category,
+      submittedAt: inc.createdAt,
+      eventObservedAt: subReport.eventObservedAt,
+      lastConfirmedAt: inc.confirmations?.[0]?.confirmedAt
+    });
+
+    // Re-calculate urgency
+    const urgency = calculateUrgency({
+      text: `${inc.situationSummary} ${subReports.map(s => s.text).join(' ')}`,
+      category: inc.category,
+      hasUnresolvedContradictions: contradictions.some(c => !c.isResolved),
+      freshnessStatus: freshness.status
+    });
+
+    // Add timeline event
+    const newTimelineEvent = {
+      id: `evt-${subReport.id}`,
+      eventType: 'REPORT_SUBMITTED' as const,
+      title: `${subReport.sourceName} Update Submitted`,
+      description: subReport.text,
+      timestamp: subReport.submittedAt,
+      displayTime: new Date(subReport.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      eventTime: subReport.eventObservedAt,
+      submissionTime: subReport.submittedAt,
+      isEventTimeUnknown: subReport.isEventTimeUnknown,
+      sourceName: subReport.sourceName,
+      evidenceLabel: subReport.verificationStatus,
+      statusBadge: subReport.verificationStatus
+    };
+
+    const updatedTimeline = [...(inc.timelineEvents || []), newTimelineEvent].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+
+    const updated: IncidentRecord = {
+      ...inc,
+      subReports,
+      contradictions,
+      freshness,
+      estimatedUrgency: urgency.urgencyLevel,
+      urgencyExplanation: urgency.explanation,
+      urgencyScore: urgency.score,
+      timelineEvents: updatedTimeline,
+      updatedAt: new Date().toISOString()
+    };
+
+    this.incidents.set(id, updated);
+    return updated;
+  }
+
+  /**
+   * Resolves a contradiction without deleting conflicting claims.
+   */
+  public resolveContradiction(
+    id: string,
+    contradictionId: string,
+    resolution: ContradictionResolution
+  ): IncidentRecord | null {
+    const inc = this.incidents.get(id);
+    if (!inc) return null;
+
+    const updatedContradictions = (inc.contradictions || []).map(c => {
+      if (c.id === contradictionId) {
+        return applyContradictionResolution(c, resolution);
+      }
+      return c;
+    });
+
+    const hasRemainingUnresolved = updatedContradictions.some(c => !c.isResolved);
+
+    // Re-evaluate actions to update conflict warnings
+    const updatedActions = (inc.recommendedActions || []).map(a => ({
+      ...a,
+      hasUnresolvedConflict: hasRemainingUnresolved,
+      conflictWarning: hasRemainingUnresolved ? a.conflictWarning : undefined
+    }));
+
+    // Add resolution timeline event
+    const resolutionEvent = {
+      id: `evt-res-${Date.now()}`,
+      eventType: 'USER_VERIFICATION' as const,
+      title: 'Contradiction Formally Resolved',
+      description: `Disagreement resolved by ${resolution.resolvedBy}. Rationale: "${resolution.resolutionRationale}".`,
+      timestamp: resolution.resolvedAt || new Date().toISOString(),
+      displayTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isEventTimeUnknown: false,
+      sourceName: resolution.resolvedBy,
+      statusBadge: 'RESOLVED'
+    };
+
+    const updatedTimeline = [...(inc.timelineEvents || []), resolutionEvent].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+
+    const updated: IncidentRecord = {
+      ...inc,
+      contradictions: updatedContradictions,
+      recommendedActions: updatedActions,
+      timelineEvents: updatedTimeline,
+      updatedAt: new Date().toISOString()
+    };
+
+    this.incidents.set(id, updated);
+    return updated;
+  }
+
+  /**
+   * Records a status confirmation and updates freshness.
+   */
+  public addConfirmation(id: string, confirmation: ConfirmationRecord): IncidentRecord | null {
+    const inc = this.incidents.get(id);
+    if (!inc) return null;
+
+    const confirmations = [confirmation, ...(inc.confirmations || [])];
+
+    const freshness = calculateFreshness({
+      category: inc.category,
+      submittedAt: inc.createdAt,
+      lastConfirmedAt: confirmation.confirmedAt
+    });
+
+    const confirmEvent = {
+      id: `evt-conf-${Date.now()}`,
+      eventType: 'STATUS_CONFIRMED' as const,
+      title: `On-Scene Status Re-Confirmed by ${confirmation.source}`,
+      description: confirmation.note || `Condition verified as CURRENT at ${confirmation.confirmedAt}.`,
+      timestamp: confirmation.confirmedAt,
+      displayTime: new Date(confirmation.confirmedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isEventTimeUnknown: false,
+      sourceName: confirmation.source,
+      statusBadge: 'CONFIRMED'
+    };
+
+    const updatedTimeline = [...(inc.timelineEvents || []), confirmEvent].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+
+    const updated: IncidentRecord = {
+      ...inc,
+      confirmations,
+      freshness,
+      timelineEvents: updatedTimeline,
+      updatedAt: new Date().toISOString()
+    };
+
+    this.incidents.set(id, updated);
+    return updated;
+  }
+
+  /**
+   * Records a reviewed correction on a fact while preserving original text and provenance in Trust Trace.
+   */
+  public correctFact(
+    id: string,
+    factId: string,
+    correctionText: string,
+    reviewerName: string
+  ): IncidentRecord | null {
+    const inc = this.incidents.get(id);
+    if (!inc) return null;
+
+    const updatedFacts = inc.userReportedFacts.map(f => {
+      if (f.id === factId) {
+        return {
+          ...f,
+          text: correctionText,
+          userConfirmed: true,
+          trustTrace: {
+            targetId: f.id,
+            supportingClaim: f.trustTrace?.supportingClaim || f.text, // Preserves original claim!
+            sourceName: f.trustTrace?.sourceName || f.sourceReference || 'User Submission',
+            sourceType: f.trustTrace?.sourceType || 'USER_TEXT',
+            submissionTime: f.trustTrace?.submissionTime || inc.createdAt,
+            evidenceLabel: f.evidenceLabel,
+            supportExplanation: f.trustTrace?.supportExplanation || 'Human-reviewed correction.',
+            verificationDetails: `Reviewed and corrected by ${reviewerName}. Original text preserved in provenance.`,
+            reviewedCorrection: correctionText,
+            reviewedBy: reviewerName,
+            reviewedAt: new Date().toISOString()
+          }
+        };
+      }
+      return f;
+    });
+
+    const correctionEvent = {
+      id: `evt-corr-${Date.now()}`,
+      eventType: 'USER_VERIFICATION' as const,
+      title: `Fact #${factId} Corrected by Reviewer`,
+      description: `Correction applied: "${correctionText}". Original provenance preserved in Trust Trace.`,
+      timestamp: new Date().toISOString(),
+      displayTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isEventTimeUnknown: false,
+      sourceName: reviewerName,
+      statusBadge: 'CORRECTED'
+    };
+
+    const updatedTimeline = [...(inc.timelineEvents || []), correctionEvent].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+
+    const updated: IncidentRecord = {
+      ...inc,
+      userReportedFacts: updatedFacts,
+      timelineEvents: updatedTimeline,
+      updatedAt: new Date().toISOString()
+    };
+
+    this.incidents.set(id, updated);
+    return updated;
+  }
+
   public generateResponderBrief(
     id: string,
     options: { scrubMedical?: boolean; scrubLocation?: boolean } = {}
@@ -127,6 +357,10 @@ class IncidentStore {
 
     const containsMedical = inc.medicalContextIncluded;
     const shouldScrub = Boolean(options.scrubMedical && containsMedical);
+
+    const unresolvedConflicts = (inc.contradictions || [])
+      .filter(c => !c.isResolved)
+      .map(c => `[UNRESOLVED] ${c.topic}: ${c.explanation}`);
 
     const brief: ResponderBrief = {
       incidentId: inc.id,
@@ -150,6 +384,8 @@ class IncidentStore {
         precautions: a.safetyPrecautions
       })),
       openUncertainties: inc.uncertainties.map(u => `${u.description} (${u.type}: ${u.mitigationSuggestion})`),
+      unresolvedContradictions: unresolvedConflicts,
+      freshnessStatus: inc.freshness?.status || 'CURRENT',
       contactEmergencyServices: [
         'National Emergency Helpline: 112',
         'Ambulance / Medical Response: 108',

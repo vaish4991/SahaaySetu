@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { IncidentRecord, DEMO_SCENARIOS } from '@sahaaysetu/shared';
 import { UrgencyBadge } from '../components/UrgencyBadge';
 import { EmergencyContactsBar } from '../components/EmergencyContactsBar';
@@ -12,7 +12,8 @@ import {
   Sparkles,
   MapPin,
   Clock,
-  Play
+  Play,
+  RotateCcw
 } from 'lucide-react';
 
 interface Props {
@@ -20,6 +21,7 @@ interface Props {
   onAnalyzeNew: () => void;
   onSelectIncident: (id: string, view: 'review' | 'actions') => void;
   onSelectDemoScenario: (demoId: string) => void;
+  onResetDemos?: () => Promise<void>;
   language: Language;
 }
 
@@ -28,9 +30,23 @@ export const Dashboard: React.FC<Props> = ({
   onAnalyzeNew,
   onSelectIncident,
   onSelectDemoScenario,
+  onResetDemos,
   language
 }) => {
   const t = translations[language];
+  const [resetting, setResetting] = useState(false);
+
+  const handleReset = async () => {
+    if (!onResetDemos) return;
+    setResetting(true);
+    try {
+      await onResetDemos();
+    } catch (err) {
+      console.error('Failed to reset demos:', err);
+    } finally {
+      setResetting(false);
+    }
+  };
 
   const criticalCount = incidents.filter(i => i.estimatedUrgency === 'CRITICAL').length;
   const highCount = incidents.filter(i => i.estimatedUrgency === 'HIGH').length;
@@ -127,7 +143,7 @@ export const Dashboard: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* 5 Realistic Sample Scenarios Showcase */}
+      {/* Realistic Demonstration Scenarios Showcase */}
       <section id="demo-scenarios" className="space-y-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
           <div>
@@ -139,9 +155,23 @@ export const Dashboard: React.FC<Props> = ({
               Deterministic, rigorously labeled test scenarios matching PromptWars Societal Benefit criteria
             </p>
           </div>
-          <span className="text-xs bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-medium border border-slate-200">
-            5 Grounded Scenarios
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-medium border border-slate-200">
+              {DEMO_SCENARIOS.length} Grounded Scenarios
+            </span>
+            {onResetDemos && (
+              <button
+                type="button"
+                onClick={handleReset}
+                disabled={resetting}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-300 transition shadow-sm"
+                title="Restore all demo scenarios to initial baseline state"
+              >
+                <RotateCcw className={`w-3.5 h-3.5 ${resetting ? 'animate-spin' : ''}`} />
+                <span>{resetting ? 'Resetting...' : 'Reset Demo State'}</span>
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

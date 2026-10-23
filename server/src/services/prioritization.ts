@@ -1,10 +1,13 @@
-import { UrgencyLevel, IncidentCategory } from '@sahaaysetu/shared';
+import { UrgencyLevel, IncidentCategory, FreshnessStatus } from '@sahaaysetu/shared';
 
 export interface UrgencyEvaluation {
   urgencyLevel: UrgencyLevel;
   score: number;
   explanation: string;
   contributingFactors: string[];
+  cautiousGuidanceRequired: boolean;
+  conflictWarning?: string;
+  freshnessWarning?: string;
 }
 
 interface PrioritizationInput {
@@ -15,16 +18,22 @@ interface PrioritizationInput {
   hasStructuralRisk?: boolean;
   isUnverifiedSource?: boolean;
   hasMedicalDistress?: boolean;
+  hasUnresolvedContradictions?: boolean;
+  freshnessStatus?: FreshnessStatus;
 }
 
 /**
  * Deterministic, rule-based urgency scoring engine.
  * Computes transparent, explainable 0-100 crisis priority.
+ * In Phase 2, integrates unresolved contradictions and information freshness.
  */
 export function calculateUrgency(input: PrioritizationInput): UrgencyEvaluation {
   let score = 20; // baseline score for any reported incident
   const factors: string[] = ['Baseline incident report registered (+20)'];
   const textLower = (input.text || '').toLowerCase();
+  let cautiousGuidanceRequired = false;
+  let conflictWarning: string | undefined = undefined;
+  let freshnessWarning: string | undefined = undefined;
 
   // Severe Life-Threat Triggers (+40)
   const lifeThreatKeywords = [
@@ -40,7 +49,8 @@ export function calculateUrgency(input: PrioritizationInput): UrgencyEvaluation 
 
   // Active Environmental / Infrastructure Hazard (+25)
   const hazardKeywords = [
-    'fuel leak', 'gas leak', 'explosion', 'fire', 'live wire', 'transformer',
+    'fuel leak', 'gas leak', 'explosion', 'fire', 'wildfire', 'forest fire', 'blaze', 'burn',
+    'smoke', 'chemical', 'ammonia', 'live wire', 'transformer',
     'power line', 'power cable', 'cable', 'sparking', 'electric', 'live power',
     'bridge collapse', 'ceiling collapse', 'slab collapse', 'flash flood', 'submerged',
     'fallen tree', 'leakage'
@@ -52,7 +62,10 @@ export function calculateUrgency(input: PrioritizationInput): UrgencyEvaluation 
   }
 
   // Worsening or High Impact Multipliers (+15)
-  const impactKeywords = ['expressway', 'highway', 'crowd', 'underpass', 'blocked', 'rising water', 'jam', 'road'];
+  const impactKeywords = [
+    'expressway', 'highway', 'crowd', 'underpass', 'blocked', 'rising water', 'jam', 'road',
+    'forest', 'woods', 'timber', 'wind', 'spread', 'spreading', 'colony', 'settlement'
+  ];
   const detectedImpacts = impactKeywords.filter(k => textLower.includes(k));
   if (detectedImpacts.length > 0) {
     score += 15;
@@ -65,13 +78,28 @@ export function calculateUrgency(input: PrioritizationInput): UrgencyEvaluation 
     factors.push('Medical emergency category weight (+15)');
   } else if (input.category === 'NATURAL_DISASTER') {
     score += 10;
-    factors.push('Natural disaster / severe weather impact (+10)');
+    factors.push('Natural disaster / wildfire / severe weather impact (+10)');
   }
 
   // Unverified Rumor / Social Forward Penalty (-20)
   if (input.isUnverifiedSource || textLower.includes('forwarded') || textLower.includes('viral') || textLower.includes('whatsapp')) {
     score -= 20;
     factors.push('Unverified external social media forward without official corroboration (-20)');
+  }
+
+  // Phase 2 Feature: Contradiction Risk Factor (+10 buffer for safety & mandatory cautious guidance)
+  if (input.hasUnresolvedContradictions) {
+    score += 10;
+    cautiousGuidanceRequired = true;
+    conflictWarning = 'Unresolved contradictory reports exist for this scene. Cautious worst-case triage applied.';
+    factors.push('Unresolved contradictory reports detected (+10 safety buffer): Conservative posture mandated');
+  }
+
+  // Phase 2 Feature: Stale Evidence Caution
+  if (input.freshnessStatus === 'STALE' || input.freshnessStatus === 'UNKNOWN') {
+    cautiousGuidanceRequired = true;
+    freshnessWarning = `Evidence is ${input.freshnessStatus}. Never assume scene is safe or condition remains unchanged based on outdated data.`;
+    factors.push(`Information freshness is ${input.freshnessStatus}: Mandatory re-confirmation required`);
   }
 
   // Bound score between 10 and 100
@@ -92,6 +120,9 @@ export function calculateUrgency(input: PrioritizationInput): UrgencyEvaluation 
     urgencyLevel,
     score: finalScore,
     explanation,
-    contributingFactors: factors
+    contributingFactors: factors,
+    cautiousGuidanceRequired,
+    conflictWarning,
+    freshnessWarning
   };
 }

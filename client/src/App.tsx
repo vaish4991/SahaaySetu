@@ -8,12 +8,14 @@ import { ActionCenter } from './pages/ActionCenter';
 import { IncidentExplorer } from './pages/IncidentExplorer';
 import { SettingsPrivacy } from './pages/SettingsPrivacy';
 import { ResponderBriefModal } from './components/ResponderBriefModal';
-import { fetchHealth, fetchIncidents, fetchIncidentById, HealthStatus } from './services/api';
+import { fetchHealth, fetchIncidents, fetchIncidentById, resetDemoScenariosApi, HealthStatus } from './services/api';
 import { Language } from './locales/translations';
+import { AuthProvider } from './context/AuthContext';
+import { AuthPage } from './pages/AuthPage';
 
-type TabType = 'dashboard' | 'submit' | 'review' | 'actions' | 'explorer' | 'settings';
+type TabType = 'dashboard' | 'submit' | 'review' | 'actions' | 'explorer' | 'settings' | 'auth';
 
-export const App: React.FC = () => {
+export const AppContent: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<TabType>('dashboard');
   const [language, setLanguage] = useState<Language>('en');
   const [incidents, setIncidents] = useState<IncidentRecord[]>([]);
@@ -91,6 +93,15 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleResetDemos = async () => {
+    try {
+      await resetDemoScenariosApi();
+      await refreshData();
+    } catch (err) {
+      console.error('Failed to reset demos:', err);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       <Navbar
@@ -99,9 +110,14 @@ export const App: React.FC = () => {
           if (tab === 'submit') {
             setSubmissionInitialData(undefined);
           }
+          if ((tab === 'review' || tab === 'actions') && !activeIncident && incidents.length > 0) {
+            setSelectedIncidentId(incidents[0].id);
+            setActiveIncident(incidents[0]);
+          }
           setCurrentTab(tab);
         }}
         geminiConfigured={Boolean(health?.geminiConfigured)}
+        hasActiveIncident={Boolean(activeIncident || incidents.length > 0)}
         language={language}
         onLanguageChange={setLanguage}
       />
@@ -116,6 +132,7 @@ export const App: React.FC = () => {
             }}
             onSelectIncident={handleSelectIncident}
             onSelectDemoScenario={handleSelectDemoScenario}
+            onResetDemos={handleResetDemos}
             language={language}
           />
         )}
@@ -128,29 +145,29 @@ export const App: React.FC = () => {
           />
         )}
 
-        {currentTab === 'review' && activeIncident && (
+        {currentTab === 'review' && (activeIncident || incidents[0]) && (
           <AnalysisReview
-            incident={activeIncident}
+            incident={activeIncident || incidents[0]}
             onUpdateIncident={(updated) => {
               setActiveIncident(updated);
               setIncidents(prev => prev.map(i => i.id === updated.id ? updated : i));
             }}
             onProceedToActions={() => setCurrentTab('actions')}
-            onOpenBrief={() => handleOpenBrief(activeIncident.id)}
+            onOpenBrief={() => handleOpenBrief((activeIncident || incidents[0]).id)}
             onSelectDuplicate={(dupId) => handleSelectIncident(dupId, 'review')}
             language={language}
           />
         )}
 
-        {currentTab === 'actions' && activeIncident && (
+        {currentTab === 'actions' && (activeIncident || incidents[0]) && (
           <ActionCenter
-            incident={activeIncident}
+            incident={activeIncident || incidents[0]}
             onUpdateIncident={(updated) => {
               setActiveIncident(updated);
               setIncidents(prev => prev.map(i => i.id === updated.id ? updated : i));
             }}
             onBackToReview={() => setCurrentTab('review')}
-            onOpenBrief={() => handleOpenBrief(activeIncident.id)}
+            onOpenBrief={() => handleOpenBrief((activeIncident || incidents[0]).id)}
             language={language}
           />
         )}
@@ -170,6 +187,13 @@ export const App: React.FC = () => {
             onLanguageChange={setLanguage}
             geminiConfigured={Boolean(health?.geminiConfigured)}
             onDataCleared={() => refreshData()}
+          />
+        )}
+
+        {currentTab === 'auth' && (
+          <AuthPage
+            language={language}
+            onAuthSuccess={() => setCurrentTab('dashboard')}
           />
         )}
       </main>
@@ -197,3 +221,12 @@ export const App: React.FC = () => {
     </div>
   );
 };
+
+export const App: React.FC = () => {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  );
+};
+

@@ -28,6 +28,16 @@ describe('Duplicate Incident Detection Algorithm', () => {
       possibleDuplicates: [],
       medicalContextIncluded: false,
       medicalContextConsentGiven: false,
+      subReports: [],
+      contradictions: [],
+      confirmations: [],
+      timelineEvents: [],
+      freshness: {
+        status: 'CURRENT',
+        ageMinutes: 0,
+        ageFormatted: 'Just now',
+        thresholdMinutes: 20
+      },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       language: 'en',

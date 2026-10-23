@@ -5,7 +5,9 @@ import {
   DEMO_SCENARIOS
 } from '@sahaaysetu/shared';
 
-const API_BASE = '/api';
+const API_BASE = typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null'
+  ? (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test' ? `${window.location.origin}/api` : '/api')
+  : 'http://localhost:3001/api';
 
 export interface HealthStatus {
   status: string;
@@ -104,6 +106,74 @@ export async function clearAllUserDataApi(): Promise<string> {
     method: 'POST'
   });
   if (!res.ok) throw new Error('Failed to clear session data');
+  const data = await res.json();
+  return data.message;
+}
+
+export async function addSubReportApi(
+  incidentId: string,
+  subReport: any
+): Promise<IncidentRecord> {
+  const res = await fetch(`${API_BASE}/incidents/${incidentId}/sub-reports`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(subReport)
+  });
+  if (!res.ok) throw new Error('Failed to add sub-report');
+  const data = await res.json();
+  return data.incident;
+}
+
+export async function resolveContradictionApi(
+  incidentId: string,
+  contradictionId: string,
+  resolution: { resolutionRationale: string; acceptedClaimId?: string; additionalEvidenceSubmitted?: string; resolvedBy?: string }
+): Promise<IncidentRecord> {
+  const res = await fetch(`${API_BASE}/incidents/${incidentId}/contradictions/${contradictionId}/resolve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(resolution)
+  });
+  if (!res.ok) throw new Error('Failed to record contradiction resolution');
+  const data = await res.json();
+  return data.incident;
+}
+
+export async function addConfirmationApi(
+  incidentId: string,
+  confirmation: { confirmedBy: string; source: string; note?: string }
+): Promise<IncidentRecord> {
+  const res = await fetch(`${API_BASE}/incidents/${incidentId}/confirmations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(confirmation)
+  });
+  if (!res.ok) throw new Error('Failed to record confirmation');
+  const data = await res.json();
+  return data.incident;
+}
+
+export async function correctFactApi(
+  incidentId: string,
+  factId: string,
+  correctionText: string,
+  reviewerName?: string
+): Promise<IncidentRecord> {
+  const res = await fetch(`${API_BASE}/incidents/${incidentId}/facts/${factId}/correction`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ correctionText, reviewerName })
+  });
+  if (!res.ok) throw new Error('Failed to record fact correction');
+  const data = await res.json();
+  return data.incident;
+}
+
+export async function resetDemoScenariosApi(): Promise<string> {
+  const res = await fetch(`${API_BASE}/incidents/reset-demos`, {
+    method: 'POST'
+  });
+  if (!res.ok) throw new Error('Failed to reset demonstration scenarios');
   const data = await res.json();
   return data.message;
 }
