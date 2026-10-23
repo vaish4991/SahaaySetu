@@ -10,6 +10,13 @@ import {
   Auth,
   User as FirebaseUser
 } from 'firebase/auth';
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  serverTimestamp,
+  Firestore
+} from 'firebase/firestore';
 
 export interface AppUser {
   uid: string;
@@ -68,6 +75,7 @@ export let isFirebaseConfigured = Boolean(
 
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
+let db: Firestore | null = null;
 let googleProvider: GoogleAuthProvider | null = null;
 
 function initFirebase(config: FirebaseConfigParams) {
@@ -75,6 +83,7 @@ function initFirebase(config: FirebaseConfigParams) {
     try {
       app = getApps().length === 0 ? initializeApp(config) : getApps()[0];
       auth = getAuth(app);
+      db = getFirestore(app);
       googleProvider = new GoogleAuthProvider();
       googleProvider.setCustomParameters({ prompt: 'select_account' });
       isFirebaseConfigured = true;
@@ -316,5 +325,56 @@ export async function logoutUserService(): Promise<void> {
     } catch (e) {
       console.warn('Firebase signout note:', e);
     }
+  }
+}
+
+/* ─────────────────────── Login Event Recording ─────────────────────── */
+
+const LOGIN_LOG_KEY = 'sahaaysetu_login_log';
+
+export interface LoginEventPayload {
+  provider: 'google' | 'password' | 'demo';
+  role?: string;
+  isNewUser?: boolean;
+}
+
+/**
+ * Records a login event to Firestore (when live) or localStorage fallback.
+ * Stores: uid, email, displayName, provider, role, timestamp.
+ */
+export async function recordLoginEvent(payload: LoginEventPayload): Promise<void> {
+  const currentUser = auth?.currentUser;
+  const event = {
+    uid: currentUser?.uid ?? `anon-${Date.now()}`,
+    email: currentUser?.email ?? 'anonymous',
+    displayName: currentUser?.displayName ?? 'Unknown',
+    provider: payload.provider,
+    role: payload.role ?? 'CITIZEN',
+    isNewUser: payload.isNewUser ?? false,
+    loginAt: new Date().toISOString(),
+  };
+
+  // Try Firestore first
+  if (db && isFirebaseConfigured) {
+    try {
+      await addDoc(collection(db, 'loginEvents'), {
+        ...event,
+        serverTimestamp: serverTimestamp(),
+      });
+      return;
+    } catch (err) {
+      console.warn('Firestore login event write note (using local fallback):', err);
+    }
+  }
+
+  // LocalStorage fallback
+  try {
+    const existing: typeof event[] = JSON.parse(localStorage.getItem(LOGIN_LOG_KEY) || '[]');
+    existing.push(event);
+    // Keep last 100 entries
+    if (existing.length > 100) existing.splice(0, existing.length - 100);
+    localStorage.setItem(LOGIN_LOG_KEY, JSON.stringify(existing));
+  } catch (e) {
+    console.warn('Login event local storage fallback error:', e);
   }
 }

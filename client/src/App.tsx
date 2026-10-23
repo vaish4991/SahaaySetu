@@ -4,7 +4,8 @@ import { Navbar } from './components/Navbar';
 import { ResponderBriefModal } from './components/ResponderBriefModal';
 import { fetchHealth, fetchIncidents, fetchIncidentById, resetDemoScenariosApi, HealthStatus } from './services/api';
 import { Language } from './locales/translations';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { LoginPage } from './pages/LoginPage';
 
 // Dynamic lazy imports for efficient bundle splitting and fast initial page load
 const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
@@ -26,20 +27,27 @@ const PageLoadingFallback: React.FC = () => (
   </div>
 );
 
+/** Full-screen spinner while Firebase resolves stored session */
+const AuthLoadingScreen: React.FC = () => (
+  <div className="min-h-screen flex flex-col items-center justify-center" style={{ background: '#020617' }}>
+    <div className="w-12 h-12 border-4 border-sky-500 border-t-transparent rounded-full animate-spin mb-4" />
+    <p className="text-slate-400 text-sm font-medium">Verifying session…</p>
+  </div>
+);
+
 export const AppContent: React.FC = () => {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+
   const [currentTab, setCurrentTab] = useState<TabType>('dashboard');
   const [language, setLanguage] = useState<Language>('en');
   const [incidents, setIncidents] = useState<IncidentRecord[]>([]);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
   const [activeIncident, setActiveIncident] = useState<IncidentRecord | null>(null);
   const [health, setHealth] = useState<HealthStatus | null>(null);
-
   const [briefModalOpen, setBriefModalOpen] = useState(false);
   const [briefIncidentId, setBriefIncidentId] = useState<string | null>(null);
-
   const [submissionInitialData, setSubmissionInitialData] = useState<Partial<IncidentInputPayload> | undefined>(undefined);
 
-  // Load initial backend status and incidents
   const refreshData = async () => {
     try {
       const healthData = await fetchHealth();
@@ -47,7 +55,6 @@ export const AppContent: React.FC = () => {
     } catch (e) {
       console.warn('Backend health check pending:', e);
     }
-
     try {
       const list = await fetchIncidents();
       setIncidents(list);
@@ -61,10 +68,11 @@ export const AppContent: React.FC = () => {
   };
 
   useEffect(() => {
-    refreshData();
-  }, []);
+    if (isAuthenticated) {
+      refreshData();
+    }
+  }, [isAuthenticated]);
 
-  // Sync active incident when selectedIncidentId changes
   useEffect(() => {
     if (!selectedIncidentId) return;
     const found = incidents.find(i => i.id === selectedIncidentId);
@@ -113,9 +121,13 @@ export const AppContent: React.FC = () => {
     }
   };
 
+  /* ── Auth gate ───────────────────────────────────────────── */
+  if (authLoading) return <AuthLoadingScreen />;
+  if (!isAuthenticated) return <LoginPage />;
+
+  /* ── Authenticated app ───────────────────────────────────── */
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-      {/* WCAG 2.2 AA / AAA Accessible Skip to Main Content Link */}
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-brand-600 focus:text-white focus:rounded-md focus:shadow-xl focus:outline-none focus:ring-2 focus:ring-white font-semibold text-sm transition"
@@ -126,9 +138,7 @@ export const AppContent: React.FC = () => {
       <Navbar
         currentTab={currentTab}
         onSelectTab={(tab) => {
-          if (tab === 'submit') {
-            setSubmissionInitialData(undefined);
-          }
+          if (tab === 'submit') setSubmissionInitialData(undefined);
           if ((tab === 'review' || tab === 'actions') && !activeIncident && incidents.length > 0) {
             setSelectedIncidentId(incidents[0].id);
             setActiveIncident(incidents[0]);
@@ -143,83 +153,73 @@ export const AppContent: React.FC = () => {
 
       <main id="main-content" tabIndex={-1} className="flex-1 pb-16 focus:outline-none">
         <Suspense fallback={<PageLoadingFallback />}>
-        {currentTab === 'dashboard' && (
-          <Dashboard
-            incidents={incidents}
-            onAnalyzeNew={() => {
-              setSubmissionInitialData(undefined);
-              setCurrentTab('submit');
-            }}
-            onSelectIncident={handleSelectIncident}
-            onSelectDemoScenario={handleSelectDemoScenario}
-            onResetDemos={handleResetDemos}
-            language={language}
-          />
-        )}
-
-        {currentTab === 'submit' && (
-          <SubmitIncident
-            onAnalysisSuccess={handleAnalysisSuccess}
-            language={language}
-            initialPayload={submissionInitialData}
-          />
-        )}
-
-        {currentTab === 'review' && (activeIncident || incidents[0]) && (
-          <AnalysisReview
-            incident={activeIncident || incidents[0]}
-            onUpdateIncident={(updated) => {
-              setActiveIncident(updated);
-              setIncidents(prev => prev.map(i => i.id === updated.id ? updated : i));
-            }}
-            onProceedToActions={() => setCurrentTab('actions')}
-            onOpenBrief={() => handleOpenBrief((activeIncident || incidents[0]).id)}
-            onSelectDuplicate={(dupId) => handleSelectIncident(dupId, 'review')}
-            language={language}
-          />
-        )}
-
-        {currentTab === 'actions' && (activeIncident || incidents[0]) && (
-          <ActionCenter
-            incident={activeIncident || incidents[0]}
-            onUpdateIncident={(updated) => {
-              setActiveIncident(updated);
-              setIncidents(prev => prev.map(i => i.id === updated.id ? updated : i));
-            }}
-            onBackToReview={() => setCurrentTab('review')}
-            onOpenBrief={() => handleOpenBrief((activeIncident || incidents[0]).id)}
-            language={language}
-          />
-        )}
-
-        {currentTab === 'explorer' && (
-          <IncidentExplorer
-            incidents={incidents}
-            onSelectIncident={handleSelectIncident}
-            onOpenBrief={(id) => handleOpenBrief(id)}
-            language={language}
-          />
-        )}
-
-        {currentTab === 'settings' && (
-          <SettingsPrivacy
-            language={language}
-            onLanguageChange={setLanguage}
-            geminiConfigured={Boolean(health?.geminiConfigured)}
-            onDataCleared={() => refreshData()}
-          />
-        )}
-
-        {currentTab === 'auth' && (
-          <AuthPage
-            language={language}
-            onAuthSuccess={() => setCurrentTab('dashboard')}
-          />
-        )}
+          {currentTab === 'dashboard' && (
+            <Dashboard
+              incidents={incidents}
+              onAnalyzeNew={() => { setSubmissionInitialData(undefined); setCurrentTab('submit'); }}
+              onSelectIncident={handleSelectIncident}
+              onSelectDemoScenario={handleSelectDemoScenario}
+              onResetDemos={handleResetDemos}
+              language={language}
+            />
+          )}
+          {currentTab === 'submit' && (
+            <SubmitIncident
+              onAnalysisSuccess={handleAnalysisSuccess}
+              language={language}
+              initialPayload={submissionInitialData}
+            />
+          )}
+          {currentTab === 'review' && (activeIncident || incidents[0]) && (
+            <AnalysisReview
+              incident={activeIncident || incidents[0]}
+              onUpdateIncident={(updated) => {
+                setActiveIncident(updated);
+                setIncidents(prev => prev.map(i => i.id === updated.id ? updated : i));
+              }}
+              onProceedToActions={() => setCurrentTab('actions')}
+              onOpenBrief={() => handleOpenBrief((activeIncident || incidents[0]).id)}
+              onSelectDuplicate={(dupId) => handleSelectIncident(dupId, 'review')}
+              language={language}
+            />
+          )}
+          {currentTab === 'actions' && (activeIncident || incidents[0]) && (
+            <ActionCenter
+              incident={activeIncident || incidents[0]}
+              onUpdateIncident={(updated) => {
+                setActiveIncident(updated);
+                setIncidents(prev => prev.map(i => i.id === updated.id ? updated : i));
+              }}
+              onBackToReview={() => setCurrentTab('review')}
+              onOpenBrief={() => handleOpenBrief((activeIncident || incidents[0]).id)}
+              language={language}
+            />
+          )}
+          {currentTab === 'explorer' && (
+            <IncidentExplorer
+              incidents={incidents}
+              onSelectIncident={handleSelectIncident}
+              onOpenBrief={(id) => handleOpenBrief(id)}
+              language={language}
+            />
+          )}
+          {currentTab === 'settings' && (
+            <SettingsPrivacy
+              language={language}
+              onLanguageChange={setLanguage}
+              geminiConfigured={Boolean(health?.geminiConfigured)}
+              onDataCleared={() => refreshData()}
+            />
+          )}
+          {currentTab === 'auth' && (
+            <AuthPage
+              language={language}
+              onAuthSuccess={() => setCurrentTab('dashboard')}
+            />
+          )}
         </Suspense>
       </main>
 
-      {/* Global Responder Brief Modal */}
       {briefIncidentId && (
         <ResponderBriefModal
           incidentId={briefIncidentId}
@@ -228,12 +228,9 @@ export const AppContent: React.FC = () => {
         />
       )}
 
-      {/* Footer with Civic & PromptWars Attribution */}
       <footer className="bg-slate-900 border-t border-slate-800 text-slate-400 py-6 text-xs text-center no-print">
         <div className="max-w-7xl mx-auto px-4 space-y-2">
-          <p className="font-semibold text-slate-300">
-            SahaaySetu (सहायसेतु) — The AI Crisis-to-Action Bridge
-          </p>
+          <p className="font-semibold text-slate-300">SahaaySetu (सहायसेतु) — The AI Crisis-to-Action Bridge</p>
           <p className="max-w-2xl mx-auto text-slate-500">
             Engineered for PromptWars Societal Benefit Challenge. Compliant with WCAG 2.2 AA accessibility principles, explicit medical consent safeguards, and explainable evidence-to-action triage.
           </p>
@@ -243,11 +240,8 @@ export const AppContent: React.FC = () => {
   );
 };
 
-export const App: React.FC = () => {
-  return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
-  );
-};
-
+export const App: React.FC = () => (
+  <AuthProvider>
+    <AppContent />
+  </AuthProvider>
+);
