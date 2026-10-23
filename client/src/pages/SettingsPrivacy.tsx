@@ -41,8 +41,9 @@ export const SettingsPrivacy: React.FC<Props> = ({
       clearLocalDraft();
       setClearMessage(msg || 'All session incident records successfully deleted.');
       onDataCleared();
-    } catch (err: any) {
-      setClearMessage(err.message || 'Failed to clear session data.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to clear session data.';
+      setClearMessage(msg);
     } finally {
       setClearing(false);
     }

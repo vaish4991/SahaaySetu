@@ -58,20 +58,36 @@ export function secureRequestLogger(req: Request, _res: Response, next: NextFunc
   next();
 }
 
+export interface SafeHttpError extends Error {
+  status?: number;
+  statusCode?: number;
+  code?: string;
+  errors?: unknown[];
+}
+
 /**
  * Centralized safe error handler.
  * Does NOT expose stack traces or internal server paths in non-development environments.
  */
-export function errorHandler(err: any, _req: Request, res: Response, _next: NextFunction) {
+export function errorHandler(
+  err: SafeHttpError,
+  _req: Request,
+  res: Response,
+  _next: NextFunction
+): void {
   const statusCode = err.status || err.statusCode || (err.name === 'ZodError' ? 400 : 500);
   const isDev = env.NODE_ENV === 'development';
 
-  console.error('[SERVER_ERROR]', {
-    message: err.message,
-    name: err.name,
-    code: err.code,
-    stack: isDev ? err.stack : undefined
-  });
+  if (statusCode >= 500) {
+    console.error('[SERVER_ERROR]', {
+      message: err.message,
+      name: err.name,
+      code: err.code,
+      stack: isDev ? err.stack : undefined
+    });
+  } else if (env.NODE_ENV !== 'test') {
+    console.warn(`[CLIENT_ERROR_${statusCode}]`, err.message);
+  }
 
   res.status(statusCode).json({
     success: false,

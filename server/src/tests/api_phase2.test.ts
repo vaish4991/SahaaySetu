@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import request from 'supertest';
+import { IncidentRecord } from '@sahaaysetu/shared';
 import { createApp } from '../app';
 
 const app = createApp();
@@ -15,7 +16,7 @@ describe('Phase 2 API Integration Tests', () => {
   it('POST /api/incidents/:id/sub-reports adds additional evidence and detects new contradictions', async () => {
     // 1. Fetch demo scenario 6 which features contradiction
     const getRes = await request(app).get('/api/incidents');
-    const demo6 = getRes.body.incidents.find((i: any) => i.id === 'demo-6-road-condition-contradiction');
+    const demo6 = (getRes.body.incidents as IncidentRecord[]).find((i) => i.id === 'demo-6-road-condition-contradiction')!;
     expect(demo6).toBeDefined();
 
     // 2. Add an additional eyewitness report
@@ -40,7 +41,7 @@ describe('Phase 2 API Integration Tests', () => {
 
   it('POST /api/incidents/:id/contradictions/:contradictionId/resolve records reviewed human resolution', async () => {
     const getRes = await request(app).get('/api/incidents');
-    const demo6 = getRes.body.incidents.find((i: any) => i.id === 'demo-6-road-condition-contradiction');
+    const demo6 = (getRes.body.incidents as IncidentRecord[]).find((i) => i.id === 'demo-6-road-condition-contradiction')!;
     expect(demo6.contradictions.length).toBeGreaterThan(0);
 
     const targetContradiction = demo6.contradictions[0];
@@ -63,11 +64,13 @@ describe('Phase 2 API Integration Tests', () => {
     // Original claims must NOT be deleted
     expect(res.body.contradiction.claimA).toBeDefined();
     expect(res.body.contradiction.claimB).toBeDefined();
+    // Dynamic triage feedback: contradiction buffer removed from actions and urgency
+    expect(res.body.incident.recommendedActions.every((a: { hasUnresolvedConflict: boolean }) => !a.hasUnresolvedConflict)).toBe(true);
   });
 
   it('POST /api/incidents/:id/confirmations records on-scene status confirmation and refreshes freshness', async () => {
     const getRes = await request(app).get('/api/incidents');
-    const demo7 = getRes.body.incidents.find((i: any) => i.id === 'demo-7-stale-landslide-photo');
+    const demo7 = (getRes.body.incidents as IncidentRecord[]).find((i) => i.id === 'demo-7-stale-landslide-photo')!;
     expect(demo7).toBeDefined();
 
     const confirmationPayload = {
@@ -85,11 +88,13 @@ describe('Phase 2 API Integration Tests', () => {
     expect(res.body.success).toBe(true);
     expect(res.body.confirmation.confirmedBy).toBe('Station Officer Verma, Chamoli Fire Service');
     expect(res.body.incident.freshness.status).toBe('CURRENT');
+    // Stale warnings cleared on action cards
+    expect(res.body.incident.recommendedActions.every((a: { staleWarning?: string }) => !a.staleWarning)).toBe(true);
   });
 
   it('POST /api/incidents/:id/facts/:factId/correction records reviewed correction while preserving original claim in Trust Trace', async () => {
     const getRes = await request(app).get('/api/incidents');
-    const inc = getRes.body.incidents.find((i: any) => i.userReportedFacts && i.userReportedFacts.length > 0);
+    const inc = (getRes.body.incidents as IncidentRecord[]).find((i) => i.userReportedFacts && i.userReportedFacts.length > 0)!;
     expect(inc).toBeDefined();
     const targetFact = inc.userReportedFacts[0];
     expect(targetFact).toBeDefined();

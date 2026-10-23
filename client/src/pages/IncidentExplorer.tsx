@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { IncidentRecord, IncidentCategory, UrgencyLevel } from '@sahaaysetu/shared';
 import { UrgencyBadge } from '../components/UrgencyBadge';
 import { FreshnessBadge } from '../components/FreshnessBadge';
@@ -34,18 +34,20 @@ export const IncidentExplorer: React.FC<Props> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedUrgency, setSelectedUrgency] = useState<string>('ALL');
 
-  const filtered = incidents.filter(inc => {
-    if (selectedCategory !== 'ALL' && inc.category !== selectedCategory) return false;
-    if (selectedUrgency !== 'ALL' && inc.estimatedUrgency !== selectedUrgency) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      const matchTitle = inc.title.toLowerCase().includes(q);
-      const matchSummary = inc.situationSummary.toLowerCase().includes(q);
-      const matchLoc = inc.location.rawText.toLowerCase().includes(q);
-      return matchTitle || matchSummary || matchLoc;
-    }
-    return true;
-  });
+  const filtered = useMemo(() => {
+    return incidents.filter(inc => {
+      if (selectedCategory !== 'ALL' && inc.category !== selectedCategory) return false;
+      if (selectedUrgency !== 'ALL' && inc.estimatedUrgency !== selectedUrgency) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchTitle = inc.title.toLowerCase().includes(q);
+        const matchSummary = inc.situationSummary.toLowerCase().includes(q);
+        const matchLoc = inc.location.rawText.toLowerCase().includes(q);
+        return matchTitle || matchSummary || matchLoc;
+      }
+      return true;
+    });
+  }, [incidents, selectedCategory, selectedUrgency, searchQuery]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
@@ -58,21 +60,23 @@ export const IncidentExplorer: React.FC<Props> = ({
             Searchable repository of citizen reports, demonstration fixtures, and verified crisis briefings
           </p>
         </div>
-        <span className="text-xs font-mono font-bold bg-slate-100 text-slate-700 px-3 py-1.5 rounded-xl border border-slate-200">
+        <span className="text-xs font-mono font-bold bg-slate-100 text-slate-700 px-3 py-1.5 rounded-xl border border-slate-200" aria-live="polite">
           Showing {filtered.length} of {incidents.length} Records
         </span>
       </div>
 
       {/* Filters & Search Toolbar */}
-      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm grid grid-cols-1 sm:grid-cols-3 gap-3" role="search" aria-label="Incident search and filters">
         {/* Search */}
         <div className="relative">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" aria-hidden="true" />
           <input
             type="text"
+            id="incident-search-input"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by keywords, location, or title..."
+            aria-label="Search incident records by keywords, location, or title"
             className="w-full text-xs rounded-xl border border-slate-300 pl-10 pr-3.5 py-2.5 focus:border-brand-500 focus:ring-brand-500 text-slate-800 placeholder-slate-400"
           />
         </div>
@@ -80,8 +84,10 @@ export const IncidentExplorer: React.FC<Props> = ({
         {/* Category Filter */}
         <div className="relative">
           <select
+            id="incident-category-filter"
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
+            aria-label="Filter incidents by category"
             className="w-full text-xs rounded-xl border border-slate-300 px-3.5 py-2.5 focus:border-brand-500 focus:ring-brand-500 text-slate-800 bg-white"
           >
             <option value="ALL">All Categories</option>
@@ -97,8 +103,10 @@ export const IncidentExplorer: React.FC<Props> = ({
         {/* Urgency Filter */}
         <div className="relative">
           <select
+            id="incident-urgency-filter"
             value={selectedUrgency}
             onChange={(e) => setSelectedUrgency(e.target.value)}
+            aria-label="Filter incidents by urgency level"
             className="w-full text-xs rounded-xl border border-slate-300 px-3.5 py-2.5 focus:border-brand-500 focus:ring-brand-500 text-slate-800 bg-white"
           >
             <option value="ALL">All Urgency Levels</option>

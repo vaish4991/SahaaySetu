@@ -2,7 +2,9 @@ import {
   IncidentInputPayload,
   IncidentRecord,
   ResponderBrief,
-  DEMO_SCENARIOS
+  DEMO_SCENARIOS,
+  DuplicateSuggestion,
+  IncidentSubReport
 } from '@sahaaysetu/shared';
 
 const API_BASE = typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null'
@@ -50,7 +52,7 @@ export async function fetchIncidentById(id: string): Promise<IncidentRecord> {
 
 export async function analyzeIncidentApi(
   payload: IncidentInputPayload
-): Promise<{ incident: IncidentRecord; possibleDuplicates: any[] }> {
+): Promise<{ incident: IncidentRecord; possibleDuplicates: DuplicateSuggestion[] }> {
   const res = await fetch(`${API_BASE}/incidents/analyze`, {
     method: 'POST',
     headers: {
@@ -112,7 +114,7 @@ export async function clearAllUserDataApi(): Promise<string> {
 
 export async function addSubReportApi(
   incidentId: string,
-  subReport: any
+  subReport: Partial<IncidentSubReport>
 ): Promise<IncidentRecord> {
   const res = await fetch(`${API_BASE}/incidents/${incidentId}/sub-reports`, {
     method: 'POST',

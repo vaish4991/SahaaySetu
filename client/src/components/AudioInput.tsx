@@ -27,7 +27,15 @@ export const AudioInput: React.FC<Props> = ({ onTranscriptChange, value }) => {
       recognition.interimResults = true;
       recognition.lang = 'en-IN'; // Default to Indian English / bilingual
 
-      recognition.onresult = (event: any) => {
+      interface SpeechRecognitionEventLike {
+        resultIndex: number;
+        results: ArrayLike<ArrayLike<{ transcript: string }>>;
+      }
+      interface SpeechRecognitionErrorEventLike {
+        error: string;
+      }
+
+      recognition.onresult = (event: SpeechRecognitionEventLike) => {
         let currentTranscript = '';
         for (let i = event.resultIndex; i < event.results.length; i++) {
           currentTranscript += event.results[i][0].transcript;
@@ -35,7 +43,7 @@ export const AudioInput: React.FC<Props> = ({ onTranscriptChange, value }) => {
         onTranscriptChange(currentTranscript);
       };
 
-      recognition.onerror = (event: any) => {
+      recognition.onerror = (event: SpeechRecognitionErrorEventLike) => {
         console.warn('Speech recognition error:', event.error);
         if (event.error !== 'no-speech') {
           setErrorMessage(`Speech recognition notice: ${event.error}. You can also type directly.`);

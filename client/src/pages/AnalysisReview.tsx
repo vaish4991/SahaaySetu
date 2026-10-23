@@ -34,7 +34,8 @@ import {
   Clock,
   PlusCircle,
   Search,
-  Check
+  Check,
+  ExternalLink
 } from 'lucide-react';
 
 interface Props {
@@ -404,6 +405,16 @@ export const AnalysisReview: React.FC<Props> = ({
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationText)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 transition"
+                title="Open location in map navigation for first responders"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-brand-600" />
+                <span>Navigate</span>
+              </a>
               <button
                 type="button"
                 onClick={handleToggleConfirmLocation}

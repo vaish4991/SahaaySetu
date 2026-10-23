@@ -1,19 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { IncidentRecord, DEMO_SCENARIOS, IncidentInputPayload } from '@sahaaysetu/shared';
 import { Navbar } from './components/Navbar';
-import { Dashboard } from './pages/Dashboard';
-import { SubmitIncident } from './pages/SubmitIncident';
-import { AnalysisReview } from './pages/AnalysisReview';
-import { ActionCenter } from './pages/ActionCenter';
-import { IncidentExplorer } from './pages/IncidentExplorer';
-import { SettingsPrivacy } from './pages/SettingsPrivacy';
 import { ResponderBriefModal } from './components/ResponderBriefModal';
 import { fetchHealth, fetchIncidents, fetchIncidentById, resetDemoScenariosApi, HealthStatus } from './services/api';
 import { Language } from './locales/translations';
 import { AuthProvider } from './context/AuthContext';
-import { AuthPage } from './pages/AuthPage';
+
+// Dynamic lazy imports for efficient bundle splitting and fast initial page load
+const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
+const SubmitIncident = lazy(() => import('./pages/SubmitIncident').then(m => ({ default: m.SubmitIncident })));
+const AnalysisReview = lazy(() => import('./pages/AnalysisReview').then(m => ({ default: m.AnalysisReview })));
+const ActionCenter = lazy(() => import('./pages/ActionCenter').then(m => ({ default: m.ActionCenter })));
+const IncidentExplorer = lazy(() => import('./pages/IncidentExplorer').then(m => ({ default: m.IncidentExplorer })));
+const SettingsPrivacy = lazy(() => import('./pages/SettingsPrivacy').then(m => ({ default: m.SettingsPrivacy })));
+const AuthPage = lazy(() => import('./pages/AuthPage').then(m => ({ default: m.AuthPage })));
 
 type TabType = 'dashboard' | 'submit' | 'review' | 'actions' | 'explorer' | 'settings' | 'auth';
+
+/** Accessible fallback loader during dynamic chunk resolution */
+const PageLoadingFallback: React.FC = () => (
+  <div className="flex flex-col items-center justify-center min-h-[50vh] p-8 text-center" role="status" aria-live="polite">
+    <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin mb-4" />
+    <p className="text-slate-600 font-medium text-sm">Loading crisis intelligence interface...</p>
+    <span className="sr-only">Loading page content</span>
+  </div>
+);
 
 export const AppContent: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<TabType>('dashboard');
@@ -104,6 +115,14 @@ export const AppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+      {/* WCAG 2.2 AA / AAA Accessible Skip to Main Content Link */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-brand-600 focus:text-white focus:rounded-md focus:shadow-xl focus:outline-none focus:ring-2 focus:ring-white font-semibold text-sm transition"
+      >
+        Skip to main content
+      </a>
+
       <Navbar
         currentTab={currentTab}
         onSelectTab={(tab) => {
@@ -122,7 +141,8 @@ export const AppContent: React.FC = () => {
         onLanguageChange={setLanguage}
       />
 
-      <main className="flex-1 pb-16">
+      <main id="main-content" tabIndex={-1} className="flex-1 pb-16 focus:outline-none">
+        <Suspense fallback={<PageLoadingFallback />}>
         {currentTab === 'dashboard' && (
           <Dashboard
             incidents={incidents}
@@ -196,6 +216,7 @@ export const AppContent: React.FC = () => {
             onAuthSuccess={() => setCurrentTab('dashboard')}
           />
         )}
+        </Suspense>
       </main>
 
       {/* Global Responder Brief Modal */}

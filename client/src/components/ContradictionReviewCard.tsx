@@ -195,9 +195,10 @@ export const ContradictionReviewCard: React.FC<Props> = ({ contradiction, onReso
                 <button
                   type="button"
                   onClick={() => setIsResolving(false)}
-                  className="text-slate-400 hover:text-slate-700"
+                  className="text-slate-400 hover:text-slate-700 p-1 rounded focus:outline-none focus:ring-1 focus:ring-brand-400"
+                  aria-label="Collapse resolution form"
                 >
-                  <ChevronUp className="w-4 h-4" />
+                  <ChevronUp className="w-4 h-4" aria-hidden="true" />
                 </button>
               </div>
 

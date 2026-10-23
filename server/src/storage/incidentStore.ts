@@ -213,6 +213,15 @@ class IncidentStore {
       conflictWarning: hasRemainingUnresolved ? a.conflictWarning : undefined
     }));
 
+    // Dynamic Triage Recalculation: Remove contradiction buffer if all contradictions resolved
+    const subReports = inc.subReports || [];
+    const updatedUrgency = calculateUrgency({
+      text: `${inc.situationSummary} ${subReports.map(s => s.text).join(' ')}`,
+      category: inc.category,
+      hasUnresolvedContradictions: hasRemainingUnresolved,
+      freshnessStatus: inc.freshness?.status
+    });
+
     // Add resolution timeline event
     const resolutionEvent = {
       id: `evt-res-${Date.now()}`,
@@ -234,6 +243,9 @@ class IncidentStore {
       ...inc,
       contradictions: updatedContradictions,
       recommendedActions: updatedActions,
+      estimatedUrgency: updatedUrgency.urgencyLevel,
+      urgencyExplanation: updatedUrgency.explanation,
+      urgencyScore: updatedUrgency.score,
       timelineEvents: updatedTimeline,
       updatedAt: new Date().toISOString()
     };
@@ -257,6 +269,24 @@ class IncidentStore {
       lastConfirmedAt: confirmation.confirmedAt
     });
 
+    const hasUnresolved = (inc.contradictions || []).some(c => !c.isResolved);
+    const subReports = inc.subReports || [];
+    const updatedUrgency = calculateUrgency({
+      text: `${inc.situationSummary} ${subReports.map(s => s.text).join(' ')}`,
+      category: inc.category,
+      hasUnresolvedContradictions: hasUnresolved,
+      freshnessStatus: freshness.status
+    });
+
+    // Clear stale warnings on actions if freshness is restored to CURRENT
+    const isStale = freshness.status === 'STALE' || freshness.status === 'UNKNOWN';
+    const updatedActions = (inc.recommendedActions || []).map(a => ({
+      ...a,
+      freshnessStatus: freshness.status,
+      staleWarning: isStale ? a.staleWarning : undefined,
+      requiresConfirmation: Boolean(a.hasUnresolvedConflict || isStale)
+    }));
+
     const confirmEvent = {
       id: `evt-conf-${Date.now()}`,
       eventType: 'STATUS_CONFIRMED' as const,
@@ -277,6 +307,10 @@ class IncidentStore {
       ...inc,
       confirmations,
       freshness,
+      recommendedActions: updatedActions,
+      estimatedUrgency: updatedUrgency.urgencyLevel,
+      urgencyExplanation: updatedUrgency.explanation,
+      urgencyScore: updatedUrgency.score,
       timelineEvents: updatedTimeline,
       updatedAt: new Date().toISOString()
     };

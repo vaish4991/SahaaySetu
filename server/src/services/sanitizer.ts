@@ -65,7 +65,12 @@ export function redactPII(text: string): string {
   return text
     // Redact email addresses
     .replace(/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/g, '[EMAIL_REDACTED]')
-    // Redact 10-digit phone numbers and international format
+    // Redact 16-digit credit/debit card numbers (before 12-digit Aadhaar)
+    .replace(/\b(?:\d{4}[-\s]?){3}\d{4}\b/g, '[CARD_REDACTED]')
+    // Redact 12-digit Aadhaar / National ID numbers
+    .replace(/\b\d{4}[-\s]\d{4}[-\s]\d{4}\b/g, '[AADHAAR_REDACTED]')
+    // Redact phone numbers (including Indian format with +91 and standard international)
+    .replace(/(?:\+?91[-.\s]?)?[6-9]\d{4}[-.\s]?\d{5}\b/g, '[PHONE_REDACTED]')
     .replace(/(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g, '[PHONE_REDACTED]');
 }
 

@@ -134,8 +134,9 @@ export async function signInWithGoogleService(selectedRole?: 'COORDINATOR' | 'FI
         authProvider: 'google',
         createdAt: new Date().toISOString()
       };
-    } catch (fbErr: any) {
-      console.warn('Firebase Google Auth encountered an error, activating resilient Google auth flow:', fbErr?.message);
+    } catch (fbErr: unknown) {
+      const msg = fbErr instanceof Error ? fbErr.message : String(fbErr);
+      console.warn('Firebase Google Auth encountered an error, activating resilient Google auth flow:', msg);
     }
   }
 
@@ -189,9 +190,11 @@ export async function registerWithEmailService(
         authProvider: 'password',
         createdAt: new Date().toISOString()
       };
-    } catch (err: any) {
-      console.warn('Firebase registration error, using resilient account creation:', err?.message);
-      if (err?.code === 'auth/email-already-in-use') {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const code = (err as { code?: string })?.code;
+      console.warn('Firebase registration error, using resilient account creation:', msg);
+      if (code === 'auth/email-already-in-use') {
         throw new Error('This email is already registered. Please sign in instead.');
       }
     }
@@ -224,10 +227,10 @@ export async function registerWithEmailService(
     existingList.push({ user: newUser, pass });
     localStorage.setItem(REGISTERED_ACCOUNTS_STORAGE_KEY, JSON.stringify(existingList));
     return newUser;
-  } catch (err: any) {
-    if (err?.message?.includes('already registered')) throw err;
-    console.warn('Local account registration fallback error:', err);
-  }
+  } catch (err: unknown) {
+      if (err instanceof Error && err.message.includes('already registered')) throw err;
+      console.warn('Local account registration fallback error:', err);
+    }
 
   const fallbackUser: AppUser = {
     uid: `usr-${Date.now()}`,
@@ -265,8 +268,9 @@ export async function loginWithEmailService(
         authProvider: 'password',
         createdAt: new Date().toISOString()
       };
-    } catch (err: any) {
-      if (err?.code === 'auth/wrong-password' || err?.code === 'auth/invalid-credential') {
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code;
+      if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
         throw new Error('Invalid email or password. Please verify credentials.');
       }
     }
@@ -285,8 +289,8 @@ export async function loginWithEmailService(
         return matched.user;
       }
     }
-  } catch (err: any) {
-    if (err?.message?.includes('password')) throw err;
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message.includes('password')) throw err;
   }
 
   return {

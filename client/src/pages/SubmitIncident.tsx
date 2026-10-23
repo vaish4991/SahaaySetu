@@ -22,6 +22,7 @@ import {
   Camera,
   HeartPulse,
   Zap,
+  MapPin,
   ArrowRight
 } from 'lucide-react';
 
@@ -35,7 +36,7 @@ interface RealWorldPreset {
   id: string;
   name: string;
   tag: string;
-  icon: any;
+  icon: React.ElementType;
   color: string;
   summary: string;
   data: Partial<IncidentInputPayload>;
@@ -282,8 +283,9 @@ export const SubmitIncident: React.FC<Props> = ({
       const result = await analyzeIncidentApi(targetPayload);
       clearLocalDraft();
       onAnalysisSuccess(result.incident.id);
-    } catch (err: any) {
-      setValidationError(err.message || 'Failed to analyze incident. Please check your network connection.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to analyze incident. Please check your network connection.';
+      setValidationError(msg);
     } finally {
       setLoading(false);
     }
@@ -646,6 +648,8 @@ export const SubmitIncident: React.FC<Props> = ({
             </div>
 
             <textarea
+              id="medical-context-input"
+              aria-label="Consented medical history and health context"
               rows={3}
               value={medicalContext}
               onFocus={() => {
@@ -672,8 +676,8 @@ export const SubmitIncident: React.FC<Props> = ({
             </label>
           </div>
 
-          {/* Location Consent */}
-          <div className="flex items-center justify-between text-xs text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-200">
+          {/* Location Consent & Device GPS Capture */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-200">
             <label className="flex items-center gap-2 cursor-pointer font-medium">
               <input
                 type="checkbox"
@@ -683,7 +687,34 @@ export const SubmitIncident: React.FC<Props> = ({
               />
               <span>{t.locationConsentTitle}</span>
             </label>
-            <span className="text-slate-500 italic">Disclosed to on-scene brief only</span>
+            <div className="flex items-center gap-2">
+              {consentLocation && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+                      navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                          const lat = pos.coords.latitude.toFixed(5);
+                          const lng = pos.coords.longitude.toFixed(5);
+                          const coordTag = `[GPS Coordinates: ${lat}, ${lng}]`;
+                          setText((prev) => (prev ? `${prev}\n${coordTag}` : coordTag));
+                        },
+                        () => {
+                          setValidationError('Unable to retrieve device GPS. Please verify browser geolocation permissions.');
+                        }
+                      );
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-brand-50 text-brand-700 border border-brand-200 hover:bg-brand-100 transition"
+                  title="Detect and append exact GPS coordinates"
+                >
+                  <MapPin className="w-3.5 h-3.5 text-brand-600" />
+                  <span>Use Device GPS</span>
+                </button>
+              )}
+              <span className="text-slate-500 italic">Disclosed to on-scene brief only</span>
+            </div>
           </div>
 
           {/* Form Actions */}

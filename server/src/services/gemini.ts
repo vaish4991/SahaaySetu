@@ -11,7 +11,13 @@ import {
   IncidentSubReport,
   TimelineEvent,
   TrustTrace,
-  FreshnessEvaluation
+  FreshnessEvaluation,
+  IncidentFact,
+  HazardItem,
+  ActionItem,
+  UncertaintyItem,
+  ContradictionItem,
+  FreshnessStatus
 } from '@sahaaysetu/shared';
 import { env, isGeminiConfigured } from '../config/env';
 import { calculateUrgency } from './prioritization';
@@ -102,6 +108,59 @@ const RESPONSE_SCHEMA_JSON = {
   ]
 };
 
+interface GeminiParsedOutput {
+  category?: IncidentCategory;
+  title?: string;
+  situationSummary?: string;
+  urgencyScore?: number;
+  urgencyLevel?: UrgencyLevel;
+  location?: {
+    rawText?: string;
+    normalized?: string;
+    confidence?: LocationConfidence;
+    coordinates?: { latitude: number; longitude: number };
+  };
+  peopleAffected?: {
+    estimatedCount?: string;
+    vulnerableGroups?: string[];
+    details?: string;
+  };
+  userReportedFacts?: Array<{
+    id?: string;
+    text?: string;
+    evidenceLabel?: EvidenceLabel;
+    userConfirmed?: boolean;
+    sourceReference?: string;
+    confidenceScore?: number;
+  }>;
+  identifiedHazards?: Array<{
+    id?: string;
+    description?: string;
+    severity?: 'SEVERE' | 'MODERATE' | 'LOW';
+    precautions?: string;
+    evidenceLabel?: EvidenceLabel;
+  }>;
+  recommendedActions?: Array<{
+    stepNumber?: number;
+    title?: string;
+    description?: string;
+    priority?: 'IMMEDIATE' | 'HIGH' | 'ROUTINE';
+    safetyPrecautions?: string;
+    rationale?: string;
+    evidenceLabel?: EvidenceLabel;
+    requiresConfirmation?: boolean;
+    emergencyServiceContact?: string;
+  }>;
+  uncertainties?: Array<{
+    id?: string;
+    description?: string;
+    type?: 'MISSING_DATA' | 'CONFLICTING_REPORT' | 'LOCATION_AMBIGUITY' | 'UNVERIFIED_SOURCE';
+    mitigationSuggestion?: string;
+  }>;
+  missingInformationGaps?: string[];
+  [key: string]: unknown;
+}
+
 export async function analyzeIncident(
   payload: IncidentInputPayload,
   isExplicitDemo = false
@@ -148,7 +207,7 @@ export async function analyzeIncident(
 
   // Real Gemini API Execution
   try {
-    const promptParts: any[] = [];
+    const promptParts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
     const hasImage = Boolean(payload.imageBase64 || payload.imageName);
     const hasOnlyImage = hasImage && !cleanText && !cleanSpeech && !cleanPasted && !cleanMedical;
 
@@ -207,13 +266,13 @@ export async function analyzeIncident(
       setTimeout(() => reject(new Error('Gemini API call timed out after 12000ms')), 12000)
     );
 
-    const response: any = await Promise.race([apiCallPromise, timeoutPromise]);
+    const response = (await Promise.race([apiCallPromise, timeoutPromise])) as { text?: string };
 
     const responseText = response.text || '';
-    let parsed: any;
+    let parsed: GeminiParsedOutput = {};
     try {
       parsed = JSON.parse(responseText);
-    } catch (parseErr) {
+    } catch {
       const cleaned = responseText.replace(/```(?:json)?/g, '').trim();
       parsed = JSON.parse(cleaned);
     }
@@ -258,18 +317,21 @@ export async function analyzeIncident(
       title: parsed.title || 'Incident Report'
     });
 
-    const userReportedFacts = (parsed.userReportedFacts || []).map((f: any, idx: number) => {
-      const factId = f.id || `fact-${idx + 1}`;
+    const rawFacts = (Array.isArray(parsed.userReportedFacts) ? parsed.userReportedFacts : []) as Array<Record<string, unknown>>;
+    const userReportedFacts = rawFacts.map((f, idx: number) => {
+      const factId = (f.id as string) || `fact-${idx + 1}`;
+      const factText = (f.text as string) || '';
+      const factLabel = (f.evidenceLabel as EvidenceLabel) || 'USER-REPORTED';
       const trace: TrustTrace = {
         targetId: factId,
-        supportingClaim: f.text,
-        sourceName: f.sourceReference || 'Citizen Eyewitness',
+        supportingClaim: factText,
+        sourceName: (f.sourceReference as string) || 'Citizen Eyewitness',
         sourceType: 'USER_TEXT',
         submissionTime: timestamp,
         eventTime: payload.eventObservedAt || undefined,
-        evidenceLabel: f.evidenceLabel || 'USER-REPORTED',
+        evidenceLabel: factLabel,
         supportExplanation: 'Extracted directly from user submission during crisis ingestion.',
-        verificationDetails: f.evidenceLabel === 'SOURCE-VERIFIED'
+        verificationDetails: factLabel === 'SOURCE-VERIFIED'
           ? 'Corroborated against external alert source.'
           : 'User-reported claim; requires on-scene confirmation.',
         hasUnresolvedContradiction: contradictions.some(c => !c.isResolved && c.topic.toLowerCase().includes('road')),
@@ -278,40 +340,46 @@ export async function analyzeIncident(
 
       return {
         id: factId,
-        text: f.text,
-        evidenceLabel: f.evidenceLabel || 'USER-REPORTED',
+        text: factText,
+        evidenceLabel: factLabel,
         userConfirmed: false,
-        sourceReference: f.sourceReference,
+        sourceReference: f.sourceReference as string | undefined,
         confidenceScore: typeof f.confidenceScore === 'number' ? f.confidenceScore : 0.85,
         trustTrace: trace
       };
     });
 
-    const potentialHazards = (parsed.potentialHazards || []).map((h: any, idx: number) => {
-      const hazId = h.id || `hazard-${idx + 1}`;
+    const rawHazards = (Array.isArray(parsed.potentialHazards) ? parsed.potentialHazards : []) as Array<Record<string, unknown>>;
+    const potentialHazards = rawHazards.map((h, idx: number) => {
+      const hazId = (h.id as string) || `hazard-${idx + 1}`;
+      const hazDesc = (h.description as string) || '';
+      const hazSeverity = (h.severity as 'SEVERE' | 'MODERATE' | 'LOW') || 'MODERATE';
+      const hazPrecautions = (h.precautions as string) || 'Proceed with caution';
+      const hazLabel = (h.evidenceLabel as EvidenceLabel) || 'AI-INFERRED';
       const trace: TrustTrace = {
         targetId: hazId,
-        supportingClaim: h.description,
+        supportingClaim: hazDesc,
         sourceName: 'SahaaySetu Gemini Core',
         sourceType: 'AI_INFERRED',
         submissionTime: timestamp,
-        evidenceLabel: h.evidenceLabel || 'AI-INFERRED',
+        evidenceLabel: hazLabel,
         supportExplanation: 'Deduced through multi-factor risk modeling of environmental, structural, and witness observations.',
         verificationDetails: 'AI-inferred hazard; safety precautions generated conservatively.'
       };
 
       return {
         id: hazId,
-        description: h.description,
-        severity: h.severity || 'MODERATE',
-        precautions: h.precautions || 'Proceed with caution',
-        evidenceLabel: h.evidenceLabel || 'AI-INFERRED',
+        description: hazDesc,
+        severity: hazSeverity,
+        precautions: hazPrecautions,
+        evidenceLabel: hazLabel,
         trustTrace: trace
       };
     });
 
-    const recommendedActions = (parsed.recommendedActions || []).map((a: any, idx: number) => {
-      const actId = a.id || `act-${idx + 1}`;
+    const rawActions = (Array.isArray(parsed.recommendedActions) ? parsed.recommendedActions : []) as Array<Record<string, unknown>>;
+    const recommendedActions = rawActions.map((a, idx: number) => {
+      const actId = (a.id as string) || `act-${idx + 1}`;
       const hasConflict = contradictions.some(c => !c.isResolved);
       const isStale = freshness.status === 'STALE' || freshness.status === 'UNKNOWN';
 
@@ -325,14 +393,19 @@ export async function analyzeIncident(
         staleWarning = `Caution: Evidence is ${freshness.status} (${freshness.ageFormatted}). Do not assume clearance.`;
       }
 
+      const actTitle = (a.title as string) || '';
+      const actDesc = (a.description as string) || '';
+      const actPriority = (a.priority as 'IMMEDIATE' | 'HIGH' | 'ROUTINE') || 'HIGH';
+      const actLabel = (a.evidenceLabel as EvidenceLabel) || 'AI-INFERRED';
+
       const trace: TrustTrace = {
         targetId: actId,
-        supportingClaim: a.title,
+        supportingClaim: actTitle,
         sourceName: 'Operational Safety Guidelines',
         sourceType: 'AI_INFERRED',
         submissionTime: timestamp,
-        evidenceLabel: a.evidenceLabel || 'AI-INFERRED',
-        supportExplanation: a.rationale || 'Prioritized to preserve life safety and mitigate secondary disasters.',
+        evidenceLabel: actLabel,
+        supportExplanation: (a.rationale as string) || 'Prioritized to preserve life safety and mitigate secondary disasters.',
         verificationDetails: 'Action steps conform to standard civic emergency triage protocols.',
         hasUnresolvedContradiction: hasConflict,
         uncertaintyNotes: conflictWarning || staleWarning
@@ -340,16 +413,16 @@ export async function analyzeIncident(
 
       return {
         id: actId,
-        stepNumber: a.stepNumber || idx + 1,
-        title: a.title,
-        description: a.description,
-        priority: a.priority || 'HIGH',
-        safetyPrecautions: a.safetyPrecautions || 'Ensure personal safety first',
-        rationale: a.rationale || 'Mitigate immediate risk',
-        evidenceLabel: a.evidenceLabel || 'AI-INFERRED',
+        stepNumber: (a.stepNumber as number) || idx + 1,
+        title: actTitle,
+        description: actDesc,
+        priority: actPriority,
+        safetyPrecautions: (a.safetyPrecautions as string) || 'Ensure personal safety first',
+        rationale: (a.rationale as string) || 'Mitigate immediate risk',
+        evidenceLabel: actLabel,
         requiresConfirmation: Boolean(a.requiresConfirmation || hasConflict || isStale),
         isCompleted: false,
-        emergencyServiceContact: a.emergencyServiceContact || '112',
+        emergencyServiceContact: (a.emergencyServiceContact as string) || '112',
         freshnessStatus: freshness.status,
         hasUnresolvedConflict: hasConflict,
         conflictWarning,
@@ -379,11 +452,11 @@ export async function analyzeIncident(
         vulnerableGroups: parsed.peopleAffected?.vulnerableGroups || [],
         details: parsed.peopleAffected?.details
       },
-      uncertainties: (parsed.uncertainties || []).map((u: any, idx: number) => ({
-        id: u.id || `unc-${idx + 1}`,
-        description: u.description,
-        type: u.type || 'MISSING_DATA',
-        mitigationSuggestion: u.mitigationSuggestion || 'Verify with on-scene responders'
+      uncertainties: (((Array.isArray(parsed.uncertainties) ? parsed.uncertainties : []) as Array<Record<string, unknown>>)).map((u, idx: number) => ({
+        id: (u.id as string) || `unc-${idx + 1}`,
+        description: (u.description as string) || 'Unverified detail on scene',
+        type: ((u.type as string) || 'MISSING_DATA') as 'MISSING_DATA' | 'CONFLICTING_REPORT' | 'LOCATION_AMBIGUITY' | 'UNVERIFIED_SOURCE',
+        mitigationSuggestion: (u.mitigationSuggestion as string) || 'Verify with on-scene responders'
       })),
       recommendedActions,
       evidenceReferences: [
@@ -441,8 +514,9 @@ export async function analyzeIncident(
     };
 
     return IncidentRecordSchema.parse(incident);
-  } catch (apiError: any) {
-    console.warn('Gemini API call failed, falling back to deterministic local analysis:', apiError?.message);
+  } catch (apiError: unknown) {
+    const errorMsg = apiError instanceof Error ? apiError.message : String(apiError);
+    console.warn('Gemini API call failed, falling back to deterministic local analysis:', errorMsg);
     return generateDeterministicIncident({
       incidentId,
       timestamp,
@@ -931,7 +1005,7 @@ function buildTimelineEvents({
   title
 }: {
   subReports: IncidentSubReport[];
-  contradictions: any[];
+  contradictions: ContradictionItem[];
   timestamp: string;
   title: string;
 }): TimelineEvent[] {
@@ -1087,9 +1161,9 @@ function generateStructuredFacts({
   category: IncidentCategory;
   timestamp: string;
   demoTemplate?: typeof DEMO_SCENARIOS[0];
-  contradictions: any[];
+  contradictions: ContradictionItem[];
   eventObservedAt?: string;
-}) {
+}): IncidentFact[] {
   if (demoTemplate) {
     return [
       {
@@ -1115,7 +1189,7 @@ function generateStructuredFacts({
   }
 
   const lower = (allText + ' ' + cleanMedical).toLowerCase();
-  const facts: any[] = [];
+  const facts: IncidentFact[] = [];
   let factIdx = 1;
 
   // Primary user observation
@@ -1276,9 +1350,9 @@ function generateStructuredFacts({
   return facts;
 }
 
-function generateDomainUncertainties(allText: string, category: IncidentCategory, hasConflict: boolean) {
+function generateDomainUncertainties(allText: string, category: IncidentCategory, hasConflict: boolean): UncertaintyItem[] {
   const lower = allText.toLowerCase();
-  const uncertainties: any[] = [];
+  const uncertainties: UncertaintyItem[] = [];
 
   if (hasConflict) {
     uncertainties.push({
@@ -1452,9 +1526,9 @@ function generateDomainHazards({
   category: IncidentCategory;
   urgencyLevel: UrgencyLevel;
   hasImage: boolean;
-  demoHazards?: any[];
+  demoHazards?: HazardItem[];
   timestamp: string;
-}) {
+}): HazardItem[] {
   if (demoHazards && demoHazards.length > 0) {
     return demoHazards.map((h, idx) => ({
       ...h,
@@ -1472,7 +1546,7 @@ function generateDomainHazards({
   }
 
   const lower = (allText + ' ' + cleanMedical).toLowerCase();
-  const hazards: any[] = [];
+  const hazards: HazardItem[] = [];
 
   // Medical History Stack Hazard Detection
   if (cleanMedical || lower.includes('pacemaker') || lower.includes('insulin') || lower.includes('diabet') || lower.includes('cabg') || lower.includes('unresponsive') || lower.includes('fainted') || lower.includes('heart') || lower.includes('cardiac') || lower.includes('asthma') || lower.includes('hypertension')) {
@@ -1637,6 +1711,24 @@ function generateDomainHazards({
   }));
 }
 
+interface IntermediateAction {
+  id: string;
+  stepNumber: number;
+  title: string;
+  description: string;
+  priority: 'IMMEDIATE' | 'HIGH' | 'ROUTINE';
+  safetyPrecautions: string;
+  rationale: string;
+  evidenceLabel: EvidenceLabel;
+  requiresConfirmation: boolean;
+  emergencyServiceContact?: string;
+  hasUnresolvedConflict?: boolean;
+  conflictWarning?: string;
+  staleWarning?: string;
+  supportingEvidenceClaim?: string;
+  importantUnknowns?: string[];
+}
+
 /**
  * Domain-specific prioritized action generator converting unstructured inputs into verified life-saving steps.
  */
@@ -1658,11 +1750,11 @@ function generateDomainActions({
   isStale: boolean;
   conflictNotice?: string;
   staleNotice?: string;
-  freshnessStatus: string;
+  freshnessStatus: FreshnessStatus;
   timestamp: string;
-}) {
+}): ActionItem[] {
   const lower = (allText + ' ' + cleanMedical).toLowerCase();
-  const actions: any[] = [];
+  const actions: IntermediateAction[] = [];
   let step = 1;
 
   // 1. Medical History Stack & Acute Distress

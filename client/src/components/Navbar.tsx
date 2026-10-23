@@ -77,26 +77,28 @@ export const Navbar: React.FC<Props> = ({
             <button
               type="button"
               onClick={() => onSelectTab('dashboard')}
-              className={`px-3 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 ${
+              aria-current={currentTab === 'dashboard' ? 'page' : undefined}
+              className={`px-3 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-brand-400 ${
                 currentTab === 'dashboard'
                   ? 'bg-brand-600 text-white shadow-sm'
                   : 'text-slate-300 hover:text-white hover:bg-slate-800'
               }`}
             >
-              <Activity className="w-4 h-4" />
+              <Activity className="w-4 h-4" aria-hidden="true" />
               <span>{t.navDashboard}</span>
             </button>
 
             <button
               type="button"
               onClick={() => onSelectTab('submit')}
-              className={`px-3.5 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 ${
+              aria-current={currentTab === 'submit' ? 'page' : undefined}
+              className={`px-3.5 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-brand-400 ${
                 currentTab === 'submit'
                   ? 'bg-brand-600 text-white shadow-sm'
                   : 'text-brand-300 hover:text-white hover:bg-slate-800'
               }`}
             >
-              <PlusCircle className="w-4 h-4 text-brand-400" />
+              <PlusCircle className="w-4 h-4 text-brand-400" aria-hidden="true" />
               <span>{t.navSubmit}</span>
             </button>
 
@@ -105,26 +107,28 @@ export const Navbar: React.FC<Props> = ({
                 <button
                   type="button"
                   onClick={() => onSelectTab('review')}
-                  className={`px-3 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 ${
+                  aria-current={currentTab === 'review' ? 'page' : undefined}
+                  className={`px-3 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-teal-400 ${
                     currentTab === 'review'
                       ? 'bg-brand-600 text-white shadow-sm'
                       : 'text-slate-300 hover:text-white hover:bg-slate-800'
                   }`}
                 >
-                  <ShieldCheck className="w-4 h-4 text-teal-400" />
+                  <ShieldCheck className="w-4 h-4 text-teal-400" aria-hidden="true" />
                   <span>{t.navReview}</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => onSelectTab('actions')}
-                  className={`px-3 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 ${
+                  aria-current={currentTab === 'actions' ? 'page' : undefined}
+                  className={`px-3 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400 ${
                     currentTab === 'actions'
                       ? 'bg-brand-600 text-white shadow-sm'
                       : 'text-slate-300 hover:text-white hover:bg-slate-800'
                   }`}
                 >
-                  <CheckSquare className="w-4 h-4 text-amber-400" />
+                  <CheckSquare className="w-4 h-4 text-amber-400" aria-hidden="true" />
                   <span>{t.navActions}</span>
                 </button>
               </>
@@ -133,26 +137,28 @@ export const Navbar: React.FC<Props> = ({
             <button
               type="button"
               onClick={() => onSelectTab('explorer')}
-              className={`px-3 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 ${
+              aria-current={currentTab === 'explorer' ? 'page' : undefined}
+              className={`px-3 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-brand-400 ${
                 currentTab === 'explorer'
                   ? 'bg-brand-600 text-white shadow-sm'
                   : 'text-slate-300 hover:text-white hover:bg-slate-800'
               }`}
             >
-              <FileText className="w-4 h-4" />
+              <FileText className="w-4 h-4" aria-hidden="true" />
               <span>{t.navExplorer}</span>
             </button>
 
             <button
               type="button"
               onClick={() => onSelectTab('settings')}
-              className={`px-3 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 ${
+              aria-current={currentTab === 'settings' ? 'page' : undefined}
+              className={`px-3 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-brand-400 ${
                 currentTab === 'settings'
                   ? 'bg-brand-600 text-white shadow-sm'
                   : 'text-slate-300 hover:text-white hover:bg-slate-800'
               }`}
             >
-              <SettingsIcon className="w-4 h-4" />
+              <SettingsIcon className="w-4 h-4" aria-hidden="true" />
               <span>{t.navSettings}</span>
             </button>
           </nav>
@@ -285,54 +291,68 @@ export const Navbar: React.FC<Props> = ({
       </div>
 
       {/* Mobile Submenu Navigation */}
-      <div className="md:hidden bg-slate-950 px-2 py-2 border-t border-slate-800 flex items-center justify-around text-xs overflow-x-auto">
+      <nav aria-label="Mobile Navigation" className="md:hidden bg-slate-950 px-2 py-2 border-t border-slate-800 flex items-center justify-around text-xs overflow-x-auto">
         <button
+          type="button"
           onClick={() => onSelectTab('dashboard')}
-          className={`px-2 py-1 rounded font-medium shrink-0 ${currentTab === 'dashboard' ? 'text-brand-400 font-bold' : 'text-slate-400'}`}
+          aria-current={currentTab === 'dashboard' ? 'page' : undefined}
+          className={`px-2 py-1 rounded font-medium shrink-0 focus:outline-none focus:ring-1 focus:ring-brand-400 ${currentTab === 'dashboard' ? 'text-brand-400 font-bold' : 'text-slate-400'}`}
         >
           {t.navDashboard}
         </button>
         <button
+          type="button"
           onClick={() => onSelectTab('submit')}
-          className={`px-2 py-1 rounded font-medium shrink-0 ${currentTab === 'submit' ? 'text-brand-400 font-bold' : 'text-slate-400'}`}
+          aria-current={currentTab === 'submit' ? 'page' : undefined}
+          className={`px-2 py-1 rounded font-medium shrink-0 focus:outline-none focus:ring-1 focus:ring-brand-400 ${currentTab === 'submit' ? 'text-brand-400 font-bold' : 'text-slate-400'}`}
         >
           {t.navSubmit}
         </button>
         {hasActiveIncident && (
           <>
             <button
+              type="button"
               onClick={() => onSelectTab('review')}
-              className={`px-2 py-1 rounded font-medium shrink-0 ${currentTab === 'review' ? 'text-teal-400 font-bold' : 'text-slate-400'}`}
+              aria-current={currentTab === 'review' ? 'page' : undefined}
+              className={`px-2 py-1 rounded font-medium shrink-0 focus:outline-none focus:ring-1 focus:ring-teal-400 ${currentTab === 'review' ? 'text-teal-400 font-bold' : 'text-slate-400'}`}
             >
               {t.navReview}
             </button>
             <button
+              type="button"
               onClick={() => onSelectTab('actions')}
-              className={`px-2 py-1 rounded font-medium shrink-0 ${currentTab === 'actions' ? 'text-amber-400 font-bold' : 'text-slate-400'}`}
+              aria-current={currentTab === 'actions' ? 'page' : undefined}
+              className={`px-2 py-1 rounded font-medium shrink-0 focus:outline-none focus:ring-1 focus:ring-amber-400 ${currentTab === 'actions' ? 'text-amber-400 font-bold' : 'text-slate-400'}`}
             >
               {t.navActions}
             </button>
           </>
         )}
         <button
+          type="button"
           onClick={() => onSelectTab('explorer')}
-          className={`px-2 py-1 rounded font-medium shrink-0 ${currentTab === 'explorer' ? 'text-brand-400 font-bold' : 'text-slate-400'}`}
+          aria-current={currentTab === 'explorer' ? 'page' : undefined}
+          className={`px-2 py-1 rounded font-medium shrink-0 focus:outline-none focus:ring-1 focus:ring-brand-400 ${currentTab === 'explorer' ? 'text-brand-400 font-bold' : 'text-slate-400'}`}
         >
           {t.navExplorer}
         </button>
         <button
+          type="button"
           onClick={() => onSelectTab('settings')}
-          className={`px-2 py-1 rounded font-medium shrink-0 ${currentTab === 'settings' ? 'text-brand-400 font-bold' : 'text-slate-400'}`}
+          aria-current={currentTab === 'settings' ? 'page' : undefined}
+          className={`px-2 py-1 rounded font-medium shrink-0 focus:outline-none focus:ring-1 focus:ring-brand-400 ${currentTab === 'settings' ? 'text-brand-400 font-bold' : 'text-slate-400'}`}
         >
           {t.navSettings}
         </button>
         <button
+          type="button"
           onClick={() => onSelectTab('auth')}
-          className={`px-2 py-1 rounded font-medium shrink-0 ${currentTab === 'auth' ? 'text-teal-400 font-bold' : 'text-slate-400'}`}
+          aria-current={currentTab === 'auth' ? 'page' : undefined}
+          className={`px-2 py-1 rounded font-medium shrink-0 focus:outline-none focus:ring-1 focus:ring-teal-400 ${currentTab === 'auth' ? 'text-teal-400 font-bold' : 'text-slate-400'}`}
         >
           Account
         </button>
-      </div>
+      </nav>
     </header>
   );
 };

@@ -76,8 +76,9 @@ export const AuthPage: React.FC<Props> = ({ language, onAuthSuccess }) => {
       await signInWithGoogle(role);
       setSuccessMsg('Successfully signed in with Google.');
       setTimeout(() => onAuthSuccess(), 400);
-    } catch (err: any) {
-      setErrorMsg(err?.message || 'Google sign-in could not be completed.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Google sign-in could not be completed.';
+      setErrorMsg(msg);
     } finally {
       setLoading(false);
     }
@@ -118,8 +119,9 @@ export const AuthPage: React.FC<Props> = ({ language, onAuthSuccess }) => {
         setSuccessMsg('Authentication verified. Welcome back.');
       }
       setTimeout(() => onAuthSuccess(), 500);
-    } catch (err: any) {
-      setErrorMsg(err?.message || 'Authentication error. Please check your credentials.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Authentication error. Please check your credentials.';
+      setErrorMsg(msg);
     } finally {
       setLoading(false);
     }

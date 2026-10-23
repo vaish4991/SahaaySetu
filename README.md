@@ -5,7 +5,7 @@
 [![Google Gemini](https://img.shields.io/badge/Gemini_AI-2.5_Flash-orange.svg)](https://ai.google.dev/)
 [![React](https://img.shields.io/badge/React-18.3-61dafb.svg)](https://react.dev/)
 [![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.4-38bdf8.svg)](https://tailwindcss.com/)
-[![Vitest](https://img.shields.io/badge/Tests-44_Passed-emerald.svg)](https://vitest.dev/)
+[![Vitest](https://img.shields.io/badge/Tests-57_Passed-emerald.svg)](https://vitest.dev/)
 [![Accessibility](https://img.shields.io/badge/WCAG-2.2_AA_Compliant-purple.svg)](https://www.w3.org/WAI/standards-guidelines/wcag/)
 
 > **SahaaySetu** is an emergency coordination bridge that converts fragmented, messy, unstructured crisis inputs — voice notes, eyewitness photos, chaotic bystander descriptions, and forwarded alerts — into verified structured intelligence, explainable triage scores, and prioritized, life-saving next steps.
@@ -176,7 +176,7 @@ All checks are executable directly from the repository root:
 # 1. Typecheck all workspaces (shared, server, client)
 npm run typecheck
 
-# 2. Run all 44 automated unit and integration tests
+# 2. Run all 57 automated unit and integration tests
 npm run test
 
 # 3. Code quality and linting verification
@@ -186,17 +186,19 @@ npm run lint
 npm run build
 ```
 
-### Automated Test Breakdown (44 Tests, 100% Pass)
+### Automated Test Breakdown (57 Tests, 100% Pass)
+- `server/src/tests/unstructured_modalities.test.ts` (8 tests): Real-world messy inputs (panicked voice transcripts, expressway fog pileups, cyclone storm surges, breaking news tickers, photos, clinical medical history stacks).
 - `server/src/tests/contradiction.test.ts` (4 tests): Genuine semantic polarity detection, location distinction filtering, temporal separation filtering (>90m), and non-destructive resolution recording.
 - `server/src/tests/freshness.test.ts` (9 tests): Category-based freshness thresholds, CURRENT/AGING/STALE status transitions, 95-minute stale photo detection, missing timestamps, invalid dates, future timestamps, and on-scene confirmation refreshes.
 - `server/src/tests/prioritization_freshness.test.ts` (3 tests): +10 urgency safety buffer on active contradictions, cautious next steps for stale information, and strict isolation of deterministic safety rules from AI suggestions.
-- `server/src/tests/api_phase2.test.ts` (5 tests): Sub-report ingestion, contradiction resolution API, on-scene confirmations, audited fact corrections, and demo reset endpoint.
+- `server/src/tests/api_phase2.test.ts` (5 tests): Sub-report ingestion, contradiction resolution API with dynamic urgency recalculation, on-scene confirmations with action warning clearing, audited fact corrections, and demo reset endpoint.
 - `server/src/tests/sanitizer.test.ts` (4 tests): Prompt injection defense, script tag stripping, phone number/email PII masking.
 - `server/src/tests/duplicates.test.ts` (2 tests): Jaccard token and geographical incident deduplication.
 - `server/src/tests/prioritization.test.ts` (4 tests): Base urgency score calculation, hazard penalties, medical boosts.
 - `server/src/tests/api.test.ts` (6 tests): Input validation, medical consent barriers, and responder brief formatting.
+- `client/src/tests/auth.test.tsx` (3 tests): Firebase authentication state management, guest mode transitions, and auth guard behaviors.
 - `client/src/tests/phase2_components.test.tsx` (3 tests): FreshnessBadge rendering, EvidenceTimeline keyboard navigation and unknown event times, ContradictionReviewCard side-by-side comparison and resolution trigger.
-- `client/src/tests/components.test.tsx` (4 tests): EvidenceBadge provenance chips, UrgencyBadge scoring, EmergencyContactsBar accessibility, ActionCenter checklist toggles.
+- `client/src/tests/components.test.tsx` (6 tests): EvidenceBadge provenance chips, UrgencyBadge scoring, EmergencyContactsBar accessibility, ActionCenter checklist toggles, IncidentExplorer filtering.
 
 ---
 

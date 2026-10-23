@@ -18,6 +18,21 @@ export default defineConfig({
       }
     }
   },
+  build: {
+    target: 'esnext',
+    minify: 'esbuild',
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-icons': ['lucide-react'],
+          'vendor-firebase': ['firebase/app', 'firebase/auth'],
+          'vendor-utils': ['zod']
+        }
+      }
+    }
+  },
   test: {
     globals: true,
     environment: 'jsdom',
