@@ -7,8 +7,8 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
 
 const envSchema = z.object({
-  PORT: z.string().default('3001').transform(v => parseInt(v, 10)),
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  PORT: z.union([z.string(), z.number()]).default('3001').transform(v => typeof v === 'number' ? v : parseInt(v, 10)),
+  NODE_ENV: z.string().default('development'),
   CLIENT_ORIGIN: z.string().default('http://localhost:5173'),
   GEMINI_API_KEY: z.string().optional().default('').transform(v => v.trim()),
   GEMINI_MODEL: z.string().default('gemini-3.8-flash'),

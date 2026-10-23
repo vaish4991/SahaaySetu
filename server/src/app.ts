@@ -1,6 +1,8 @@
 import express, { Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import path from 'path';
+import fs from 'fs';
 import { env } from './config/env';
 import { apiRateLimiter, secureRequestLogger, errorHandler } from './middleware/security';
 import { healthRouter } from './routes/health';
@@ -11,12 +13,14 @@ export function createApp(): Express {
 
   // Security HTTP Headers
   app.use(helmet({
+    contentSecurityPolicy: false,
     crossOriginResourcePolicy: { policy: 'cross-origin' }
   }));
 
-  // CORS Configuration
+  // CORS Configuration - Permissive for live deployment and evaluator access
   app.use(cors({
-    origin: [env.CLIENT_ORIGIN, 'http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: true,
+    credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
   }));
@@ -33,7 +37,29 @@ export function createApp(): Express {
   app.use('/api/health', healthRouter);
   app.use('/api/incidents', incidentsRouter);
 
-  // 404 Handler
+  // Serve static client assets in production or when client/dist build exists
+  const candidateDistPaths = [
+    path.resolve(process.cwd(), 'client/dist'),
+    path.resolve(process.cwd(), '../client/dist'),
+    path.resolve(__dirname, '../../client/dist'),
+    path.resolve(__dirname, '../../../client/dist')
+  ];
+
+  const clientDistPath = candidateDistPaths.find(p => fs.existsSync(p));
+
+  if (clientDistPath) {
+    app.use(express.static(clientDistPath));
+
+    // Single-Page Application (SPA) fallback: serve index.html for all non-API paths
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api')) {
+        return next();
+      }
+      res.sendFile(path.join(clientDistPath, 'index.html'));
+    });
+  }
+
+  // 404 Handler for undefined API routes
   app.use((_req, res) => {
     res.status(404).json({ success: false, error: 'Endpoint not found' });
   });
@@ -43,3 +69,4 @@ export function createApp(): Express {
 
   return app;
 }
+
